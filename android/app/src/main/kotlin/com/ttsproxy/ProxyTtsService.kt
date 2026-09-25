@@ -443,15 +443,22 @@ class ProxyTtsService : TextToSpeechService() {
                 if (!session.stopped) callback.error(TextToSpeech.ERROR_SERVICE)
                 return
             }
+            // 打断正好落在提交之前的话，onStop 里的 stop 已经执行完，拦不住刚交上去的这一块。
+            // 只在这个窄窗口里补停一次，而且就在提交之后当场停。
+            //
+            // 不要在所有 STOPPED 路径上都补停：那样补的这一次 stop 紧贴着下一句的提交，
+            // 异步处理 stop 的引擎会把它落到下一句头上，下一句被掐、下游报「被打断」、
+            // 又触发补停……朗读读着读着就断了。上一版就是全路径补停，真机上出现了朗读中途停止，
+            // 这是最可疑的原因（按改动逐条排查得出，没有日志证实）。
+            if (session.stopped) {
+                downstream.stopNow()
+                downstream.finish(id)
+                return
+            }
             try {
                 when (drain(session, pipe, callback, state)) {
                     DrainResult.DONE -> Unit
-                    DrainResult.STOPPED -> {
-                        // 打断可能落在提交之前（那时 onStop 里的 stop 早就执行完了），
-                        // 这一块会被下游完整合成一遍、排在下一句前面。这里再停一次。
-                        downstream.stopNow()
-                        return
-                    }
+                    DrainResult.STOPPED -> return
                     DrainResult.STALLED -> {
                         // 下游卡死：它的队列头上堵着这一块，后面每一句都得先等满看门狗。
                         // 丢掉这条连接，下一句重连或换顶替。
@@ -641,6 +648,13 @@ class ProxyTtsService : TextToSpeechService() {
                 callback.error(TextToSpeech.ERROR_SERVICE)
                 return
             }
+            // 直通模式是下游直接出声：打断要是正好落在提交之前，不当场停它就会整块念完。
+            // 只在这个窄窗口里补停，理由见 streamThrough。
+            if (session.stopped) {
+                downstream.stopNow()
+                downstream.finish(id)
+                return
+            }
 
             try {
                 // 直通模式下，播放期间不会有任何事件，只有播完才来 onDone。
@@ -648,11 +662,7 @@ class ProxyTtsService : TextToSpeechService() {
                 val budget = PASSTHROUGH_BASE_TIMEOUT_MS + chunk.length * PASSTHROUGH_MS_PER_CHAR
                 var waited = 0L
                 while (true) {
-                    if (session.stopped) {
-                        // 直通模式是下游直接出声：打断要是落在提交之前，不停它就会整块念完
-                        downstream.stopNow()
-                        return
-                    }
+                    if (session.stopped) return
                     val event = pipe.poll(POLL_SLICE_MS)
                     if (event == null) {
                         waited += POLL_SLICE_MS
