@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  自定义词典。全部用标准控件，TalkBack 支持最好。
+  每个输入框都用 labelFor 绑定到前面的说明文字，焦点落进去时能念出这是什么框。
+-->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:labelFor="@+id/dict_key"
+            android:text="@string/dict_key_label"
+            android:textSize="16sp" />
+
+        <EditText
+            android:id="@+id/dict_key"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="@string/dict_key_hint"
+            android:importantForAutofill="no"
+            android:inputType="text"
+            android:textSize="18sp" />
+
+        <!-- 48dp 是无障碍最小触摸目标 -->
+        <Button
+            android:id="@+id/dict_lookup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:minHeight="48dp"
+            android:text="@string/dict_lookup"
+            android:textSize="18sp" />
+
+        <TextView
+            android:id="@+id/dict_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:focusable="true"
+            android:textIsSelectable="true"
+            android:textSize="17sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:labelFor="@+id/dict_brief"
+            android:text="@string/dict_brief_label"
+            android:textSize="16sp" />
+
+        <EditText
+            android:id="@+id/dict_brief"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:importantForAutofill="no"
+            android:inputType="text"
+            android:textSize="18sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:labelFor="@+id/dict_verbose"
+            android:text="@string/dict_verbose_label"
+            android:textSize="16sp" />
+
+        <EditText
+            android:id="@+id/dict_verbose"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="top|start"
+            android:importantForAutofill="no"
+            android:inputType="textMultiLine"
+            android:minLines="2"
+            android:textSize="18sp" />
+
+        <Button
+            android:id="@+id/dict_save"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:minHeight="48dp"
+            android:text="@string/dict_save"
+            android:textSize="18sp" />
+
+        <Button
+            android:id="@+id/dict_mute"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:minHeight="48dp"
+            android:text="@string/dict_mute"
+            android:textSize="18sp" />
+
+        <Button
+            android:id="@+id/dict_delete"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:minHeight="48dp"
+            android:text="@string/dict_delete"
+            android:textSize="18sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:labelFor="@+id/dict_list"
+            android:text="@string/dict_list_label"
+            android:textSize="16sp" />
+
+        <TextView
+            android:id="@+id/dict_list"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:focusable="true"
+            android:textIsSelectable="true"
+            android:textSize="17sp" />
+
+        <Button
+            android:id="@+id/dict_export"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:minHeight="48dp"
+            android:text="@string/dict_export"
+            android:textSize="18sp" />
+
+        <Button
+            android:id="@+id/dict_import"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:minHeight="48dp"
+            android:text="@string/dict_import"
+            android:textSize="18sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="16dp"
+            android:text="@string/dict_format_help"
+            android:textSize="15sp" />
+    </LinearLayout>
+</ScrollView>

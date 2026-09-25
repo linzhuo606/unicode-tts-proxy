@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      Android 11+ 的包可见性限制：不声明这段，TextToSpeech.getEngines() 会返回空列表
+      （下游引擎选择界面一片空白），而且 new TextToSpeech(ctx, l, pkg) 里的 bindService
+      会直接返回 false。不要改用 QUERY_ALL_PACKAGES —— 那个权限上架要审批，而这里够用。
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".App"
+        android:allowBackup="false"
+        android:icon="@android:drawable/ic_btn_speak_now"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.TtsProxy">
+
+        <!--
+          TTS 引擎服务。三个容易踩的点：
+          1. category.DEFAULT 是必需的 —— 系统用 queryIntentServices(MATCH_DEFAULT_ONLY)
+             枚举引擎，缺这一行本引擎根本不会出现在「文字转语音输出」列表里。
+          2. 绝不要加 android:permission —— AOSP 里根本不存在 BIND_TTS_SERVICE 这个权限，
+             TTS 引擎就是普通的 exported service，加了只会让 TalkBack 绑不上。
+          3. directBootAware 让开机解锁前无障碍就能用。
+        -->
+        <service
+            android:name=".ProxyTtsService"
+            android:directBootAware="true"
+            android:exported="true"
+            android:label="@string/engine_label">
+            <intent-filter>
+                <action android:name="android.intent.action.TTS_SERVICE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.speech.tts"
+                android:resource="@xml/tts_engine" />
+        </service>
+
+        <!--
+          注意 action 的真名是 CHECK_TTS_DATA，不是 CHECK_VOICE_DATA
+          （后者只是结果码的常量名，这是极常见的混淆）。
+          系统是拿到 PASS 之后才写 Settings.Secure.TTS_DEFAULT_SYNTH ——
+          这个 Activity 不返回或返回 FAIL，用户就切不成我们的引擎。
+        -->
+        <activity
+            android:name=".CheckTtsDataActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.speech.tts.engine.CHECK_TTS_DATA" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".GetSampleTextActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.speech.tts.engine.GET_SAMPLE_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- 系统设置里引擎旁边的齿轮会用 setClassName 直接拉起它，所以必须 exported。 -->
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.speech.tts.engine.CONFIGURE_ENGINE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".DebugActivity"
+            android:exported="false"
+            android:label="@string/debug_title"
+            android:parentActivityName=".SettingsActivity" />
+
+        <activity
+            android:name=".DictActivity"
+            android:exported="false"
+            android:label="@string/dict_title"
+            android:parentActivityName=".SettingsActivity" />
+    </application>
+</manifest>

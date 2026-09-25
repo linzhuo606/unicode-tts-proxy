@@ -1,0 +1,18 @@
+# ttsproxy 用户词典 v1 —— 国际音标补充包
+#
+# ICEB 盲文音标收录、但在西文里同时是普通字母的 9 个符号。
+# 为什么不放进内置词典：这些字符在法语、丹麦语、捷克语里就是字母。
+# 收进去的话 façade 会被读成「fa 清硬腭擦音 ade」，Čapek 会被读坏。
+# 所以默认不收；读音标教材、需要与 ICEB 完全对齐时，在「自定义词典」界面导入本文件。
+# 撤销：在词典界面逐条删除即可，内置词典本身没有被改动。
+#
+# 每行：字符<TAB>简洁读法<TAB>详细读法<TAB>选项<TAB># 码位
+æ	次开前元音	点 1 4 6 次开前元音		# U+00E6  near-open front unrounded vowel
+ç	清硬腭擦音	点 2 3 5 点 1 4 清硬腭擦音		# U+00E7  voiceless palatal fricative
+ð	浊齿擦音	点 1 2 4 5 6 浊齿擦音		# U+00F0  voiced dental fricative
+ø	半闭前圆唇元音	点 1 2 5 6 半闭前圆唇元音		# U+00F8  close-mid front rounded vowel
+č	清龈后塞擦音	点 1 4 点 4 点 2 3 6 清龈后塞擦音		# U+010D  voiceless postalveolar affricate
+œ	半开前圆唇元音	点 2 4 6 半开前圆唇元音		# U+0153  open-mid front rounded vowel
+š	清龈后擦音	点 2 3 4 点 4 点 2 3 6 清龈后擦音		# U+0161  voiceless postalveolar fricative
+ž	浊龈后擦音	点 1 3 5 6 点 4 点 2 3 6 浊龈后擦音		# U+017E  voiced postalveolar fricative
+ǰ	浊龈后塞擦音	点 2 4 5 点 4 点 2 3 6 浊龈后塞擦音		# U+01F0  voiced postalveolar affricate

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  刻意用标准的 PreferenceScreen 而不是自绘界面：TalkBack 对它的支持最好，
+  盲人用户要能纯靠听完成首次配置。
+-->
+<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory app:title="@string/pref_downstream_title">
+        <ListPreference
+            app:key="downstream_engine"
+            app:persistent="true"
+            app:summary="@string/pref_downstream_summary"
+            app:title="@string/pref_downstream_title" />
+
+        <Preference
+            app:key="test_speak"
+            app:summary="@string/pref_test_summary"
+            app:title="@string/pref_test_title" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/pref_verbosity_title">
+        <ListPreference
+            app:defaultValue="brief"
+            app:entries="@array/verbosity_entries"
+            app:entryValues="@array/verbosity_values"
+            app:key="verbosity"
+            app:summary="@string/pref_verbosity_summary"
+            app:title="@string/pref_verbosity_title" />
+
+        <SwitchPreferenceCompat
+            app:defaultValue="true"
+            app:key="detail_single_emoji"
+            app:summary="@string/pref_detail_single_summary"
+            app:title="@string/pref_detail_single_title" />
+
+        <SwitchPreferenceCompat
+            app:defaultValue="false"
+            app:key="ipa_braille"
+            app:summary="@string/pref_ipa_braille_summary"
+            app:title="@string/pref_ipa_braille_title" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/pref_dict_title">
+        <Preference
+            app:key="open_dict"
+            app:summary="@string/pref_dict_summary"
+            app:title="@string/pref_dict_title" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/pref_debug_title">
+        <Preference
+            app:key="open_debug"
+            app:summary="@string/pref_debug_summary"
+            app:title="@string/pref_debug_title" />
+
+        <SwitchPreferenceCompat
+            app:defaultValue="false"
+            app:key="compat_mode"
+            app:summary="@string/pref_compat_summary"
+            app:title="@string/pref_compat_title" />
+
+        <Preference
+            app:key="help_restore"
+            app:selectable="false"
+            app:summary="@string/pref_help_summary"
+            app:title="@string/pref_help_title" />
+    </PreferenceCategory>
+</PreferenceScreen>

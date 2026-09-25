@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="verbosity_entries">
+        <item>@string/verbosity_off</item>
+        <item>@string/verbosity_brief</item>
+        <item>@string/verbosity_verbose</item>
+    </string-array>
+    <!-- 值要和 core 里 Verbosity.key 对得上 -->
+    <string-array name="verbosity_values">
+        <item>off</item>
+        <item>brief</item>
+        <item>verbose</item>
+    </string-array>
+</resources>

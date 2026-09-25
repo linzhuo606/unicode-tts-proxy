@@ -1,0 +1,27 @@
+# Gradle
+.gradle/
+build/
+local.properties
+*.hprof
+
+# Android
+*.apk
+*.aab
+*.ap_
+*.dex
+captures/
+.cxx/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# 生成物与下载的数据（可由 tools 重新生成）
+tools/data/emoji-test.txt
+tools/data/annotations-zh.json
+tools/data/annotations-derived-zh.json
+
+# OS
+.DS_Store
+Thumbs.db

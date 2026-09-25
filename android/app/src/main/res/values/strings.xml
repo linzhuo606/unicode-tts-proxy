@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Unicode 朗读中转</string>
+    <string name="engine_label">Unicode 朗读中转</string>
+
+    <!-- 三类符号各带一点，用户点一下试听就能立刻听出中转是否生效 -->
+    <string name="sample_text">已完成 👍 温度 25℃，面积 100㎡，公式 ∑ x² ，水 H₂O</string>
+
+    <string name="pref_downstream_title">发声引擎</string>
+    <string name="pref_downstream_summary">选择实际负责发声的语音引擎</string>
+    <string name="pref_downstream_empty">没有找到其他语音引擎</string>
+    <string name="pref_downstream_none">尚未选择</string>
+
+    <string name="pref_verbosity_title">符号朗读详略</string>
+    <string name="pref_verbosity_summary">决定表情、数学、理化符号读得多细</string>
+
+    <string name="pref_detail_single_title">单个表情自动读详细</string>
+    <string name="pref_detail_single_summary">整段只有一个表情时，不管详略档位都读完整描述。逐字符浏览查表情时很有用</string>
+    <string name="pref_ipa_braille_title">音标读盲文点位</string>
+    <string name="pref_ipa_braille_summary">关闭时音标读中文音理简称，ŋ 读「软腭鼻音」；打开后读 ICEB 盲文点位，ŋ 读「点 1 2 4 6」。详细档任何时候都是点位加音理</string>
+
+    <string name="pref_compat_title">兼容模式</string>
+    <string name="pref_compat_summary">改由发声引擎自己播放。只有在默认方式没有声音时才需要打开</string>
+
+    <string name="pref_test_title">试听</string>
+    <string name="pref_test_summary">朗读一段包含表情、数学和理化符号的示例文本</string>
+
+    <string name="pref_debug_title">检查朗读效果</string>
+    <string name="pref_debug_summary">输入任意文本，查看并试听处理后的结果</string>
+
+    <string name="pref_help_title">怎样换回原来的引擎</string>
+    <string name="pref_help_summary">打开系统设置，进入无障碍，选择文字转语音输出，把首选引擎改回原来的引擎</string>
+
+    <string name="verbosity_off">关闭：不读表情符号</string>
+    <string name="verbosity_brief">简洁：读简短名称</string>
+    <string name="verbosity_verbose">详细：读完整描述</string>
+
+    <string name="debug_title">检查朗读效果</string>
+    <string name="debug_input_hint">在这里输入或粘贴要检查的文本</string>
+    <string name="debug_input_label">待检查的文本</string>
+    <string name="debug_result_label">处理后的文本</string>
+    <string name="debug_process">处理并朗读</string>
+    <string name="debug_empty">请先输入文本</string>
+    <string name="debug_diagnostics_label">运行诊断</string>
+    <string name="debug_reset_diagnostics">清零诊断计数</string>
+
+    <string name="toast_engine_ready">中转已就绪，将由 %1$s 发声</string>
+    <string name="toast_no_engine">请先选择一个发声引擎</string>
+
+    <!-- 自定义词典 -->
+    <string name="pref_dict_title">自定义词典</string>
+    <string name="pref_dict_summary">查看和修改某个字符的读法，也可以让它不读；支持导入导出</string>
+    <string name="dict_title">自定义词典</string>
+    <string name="dict_key_label">要查的字符</string>
+    <string name="dict_key_hint">粘贴一个字符，或写 U+1F63B</string>
+    <string name="dict_lookup">查询</string>
+    <string name="dict_brief_label">简洁读法</string>
+    <string name="dict_verbose_label">详细读法（留空表示与简洁读法相同）</string>
+    <string name="dict_save">保存我的读法</string>
+    <string name="dict_mute">让这个字符不读</string>
+    <string name="dict_delete">删除我的读法，恢复内置</string>
+    <string name="dict_list_label">我改过的字符</string>
+    <string name="dict_list_empty">还没有自定义读法</string>
+    <string name="dict_list_count">共 %1$d 条</string>
+    <string name="dict_list_muted">不读</string>
+    <string name="dict_export">导出词典到文件</string>
+    <string name="dict_import">从文件导入词典</string>
+    <string name="dict_bad_key">没认出这是什么字符。可以直接粘贴字符，或者写成 U加号后跟码位，例如 U+1F63B</string>
+    <string name="dict_lookup_first">请先查询一个字符</string>
+    <string name="dict_need_brief">简洁读法不能是空的。想让它不读，请按「让这个字符不读」</string>
+    <string name="dict_state_custom">我的读法：%1$s，详细：%2$s</string>
+    <string name="dict_state_muted">我的设置：不读这个字符</string>
+    <string name="dict_state_none_custom">我还没有改过这个字符</string>
+    <string name="dict_state_builtin">内置读法：%1$s，详细：%2$s</string>
+    <string name="dict_state_no_builtin">内置词典里没有这个字符，会原样交给发声引擎</string>
+    <string name="dict_saved">已保存。现在会读成：%1$s</string>
+    <string name="dict_save_failed">保存失败，词典文件写不进去</string>
+    <string name="dict_muted">已设为不读：%1$s</string>
+    <string name="dict_deleted">已删除我的读法。现在会读成：%1$s</string>
+    <string name="dict_nothing_to_delete">这个字符本来就没有自定义读法</string>
+    <string name="dict_preview_silent">什么都不读</string>
+    <string name="dict_exported">已导出 %1$d 条</string>
+    <string name="dict_export_failed">导出失败，写不进所选文件</string>
+    <string name="dict_imported">已导入 %1$d 条</string>
+    <string name="dict_import_failed">导入失败，读不出所选文件</string>
+    <string name="dict_import_problems">有 %1$d 行没能读懂，已跳过</string>
+    <string name="dict_import_problem_line">第 %1$d 行：%2$s</string>
+    <string name="dict_no_file_picker">这台设备上没有可用的文件选择器</string>
+    <string name="dict_format_help">词典文件格式：每行四列，用制表符分开，依次是字符、简洁读法、详细读法、选项。简洁读法写一个减号表示不读。详细读法留空表示与简洁读法相同。选项可以省略，支持 kind 指定类别、repeat 等号 collapse 表示连续重复只读一次。井号开头的行是注释。第一列也可以写码位，例如 U加号1F63B，多个码位之间用空格分开。</string>
+
+</resources>

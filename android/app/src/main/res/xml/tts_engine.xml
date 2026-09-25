@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  这个文件的 styleable 只声明了 settingsActivity 一个属性，写别的没用。
+  根标签必须字面是 tts-engine，否则系统只会打一条 warn 然后当没看见。
+  settingsActivity 必须是全限定类名。
+-->
+<tts-engine xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="com.ttsproxy.SettingsActivity" />

@@ -1,0 +1,152 @@
+# 国际音标（IPA）。简洁档读中文音理简称，详细档读盲文点位加完整音理。
+# 覆盖范围与 ICEB IPA Braille 对齐：它收的音标符号我们全收，逐条核对过点位。
+# 点位取自 liblouis 的 IPA.utb / IPA-unicode-range.uti（LGPL-2.1+，
+# 2025 年版权方含 IPA Braille 作者 Robert Englebretson 本人）。
+# 中文音理描述由表注释里的英文描述用受控词表**机械翻译**，不经模型推断；
+# 简洁档的简称再由音理描述按固定规则派生（响音去「浊」、不圆唇作展唇、次闭次前作次闭前）。
+# 三类刻意不收，收了会误伤普通文字：
+#   æ ç ð ø č œ š ž ǰ —— 西文里就是字母，读点位会把 façade、Čapek 读坏。
+#                        需要读音标教材时，导入 tools/data/ipa-letters.tsv 即可补齐。
+#   β θ χ —— 希腊字母，数理材料里出现得多得多，走希腊字母读法。
+#   ‖ ↑ ↓ → ↗ ↘ ⁿ —— 各有本职读法（竖线、箭头、上标），走原读法。
+0127	清咽擦音	点 2 3 5 点 1 2 5 清咽擦音	# voiceless pharyngeal fricative
+014B	软腭鼻音	点 1 2 4 6 浊软腭鼻音	# voiced velar nasal
+01C0	齿搭嘴音	点 1 2 3 4 6 点 1 4 5 6 齿搭嘴音	# dental click
+01C1	齿龈边搭嘴音	点 1 2 3 4 6 点 1 2 3 齿龈边搭嘴音	# alveolar lateral click
+01C2	龈腭搭嘴音	点 1 2 3 4 6 点 1 5 6 龈腭搭嘴音	# palatoalveolar click
+01C3	齿龈搭嘴音	点 1 2 3 4 6 点 2 3 4 5 齿龈搭嘴音	# (post-)alveolar click
+0250	次开央元音	点 2 3 5 点 1 次开央元音	# near-open central vowel
+0251	开后展唇元音	点 1 6 开后不圆唇元音	# open back unrounded vowel
+0252	开后圆唇元音	点 2 3 5 点 1 6 开后圆唇元音	# open back rounded vowel
+0253	浊双唇内爆音	点 2 3 6 点 1 2 浊双唇内爆音	# voiced bilabial implosive
+0254	半开后圆唇元音	点 1 2 6 半开后圆唇元音	# open-mid back rounded vowel
+0255	清龈腭擦音	点 2 3 6 点 1 4 清龈腭擦音	# voiceless alveolopalatal fricative
+0256	浊卷舌塞音	点 2 5 6 点 1 4 5 浊卷舌塞音	# voiced retroflex plosive
+0257	浊齿龈内爆音	点 2 3 6 点 1 4 5 浊齿龈内爆音	# voiced dental/alveolar implosive
+0258	半闭央展唇元音	点 2 3 5 点 1 5 半闭央不圆唇元音	# close-mid central unrounded vowel
+0259	中央元音	点 2 6 中央元音	# mid central vowel
+025A	卷舌中央元音	点 2 6 点 5 点 1 2 3 5 卷舌中央元音	# r-colored mid central vowel
+025B	半开前展唇元音	点 3 4 5 半开前不圆唇元音	# open-mid front unrounded vowel (IPA Extensions here, greek epsilon is \x03B5)
+025C	半开央展唇元音	点 2 3 5 点 3 4 5 半开央不圆唇元音	# open-mid central unrounded vowel
+025E	半开央圆唇元音	点 2 3 6 点 3 4 5 半开央圆唇元音	# open-mid central rounded vowel
+025F	浊硬腭塞音	点 3 5 点 2 4 5 浊硬腭塞音	# voiced palatal plosive
+0260	浊软腭内爆音	点 2 3 6 点 1 2 4 5 浊软腭内爆音	# voiced velar implosive
+0261	浊软腭塞音	点 1 2 4 5 浊软腭塞音	# voiced velar plosive
+0262	浊小舌塞音	点 3 5 点 1 2 4 5 浊小舌塞音	# voiced uvular plosive
+0263	浊软腭擦音	点 4 6 点 1 2 4 5 浊软腭擦音	# voiced velar fricative (IPA Extensions here, greek gamma is \x03B3)
+0264	半闭后展唇元音	点 2 3 5 点 1 3 5 半闭后不圆唇元音	# close-mid back unrounded vowel
+0265	唇化硬腭近音	点 2 5 6 点 1 2 5 浊唇化硬腭近音	# voiced labial-palatal approximant
+0266	浊声门擦音	点 2 3 6 点 1 2 5 浊声门擦音	# voiced glottal fricative
+0267	清龈后软腭擦音	点 2 3 6 点 1 2 4 6 同时发清龈后软腭擦音	# simultaneous voiceless postalveolar and velar fricative
+0268	闭央展唇元音	点 3 5 6 点 2 4 闭央不圆唇元音	# close central unrounded vowel
+026A	次闭前展唇元音	点 3 4 次闭次前不圆唇元音	# near-close near-front unrounded vowel
+026B	软腭化齿龈边近音	点 2 3 5 点 1 2 3 软腭化浊齿龈边近音	# velarized voiced alveolar lateral approximant
+026C	清齿龈边擦音	点 2 3 6 点 1 2 3 清齿龈边擦音	# voiceless alveolar lateral fricative
+026D	卷舌边近音	点 2 5 6 点 1 2 3 浊卷舌边近音	# voiced retroflex lateral approximant
+026E	浊齿龈边擦音	点 1 2 3 点 5 点 2 3 4 6 浊齿龈边擦音	# voiced alveolar lateral fricative
+026F	闭后展唇元音	点 2 3 5 点 1 3 6 闭后不圆唇元音	# close back unrounded vowel
+0270	软腭近音	点 2 3 6 点 1 3 4 浊软腭近音	# voiced velar approximant
+0271	唇齿鼻音	点 2 3 5 点 1 3 4 浊唇齿鼻音	# voiced labiodental nasal
+0272	硬腭鼻音	点 1 2 3 4 5 6 浊硬腭鼻音	# voiced palatal nasal
+0273	卷舌鼻音	点 2 5 6 点 1 3 4 5 浊卷舌鼻音	# voiced retroflex nasal
+0274	小舌鼻音	点 3 5 点 1 3 4 5 浊小舌鼻音	# voiced uvular nasal
+0275	半闭央圆唇元音	点 3 5 6 点 1 3 5 半闭央圆唇元音	# close-mid central rounded vowel
+0276	开前圆唇元音	点 3 5 点 2 4 6 开前圆唇元音	# open front rounded vowel
+0278	清双唇擦音	点 4 6 点 1 2 4 清双唇擦音	# voiceless bilabial fricative (IPA Extensions here, greek phi is \x03D5)
+0279	齿龈近音	点 3 4 5 6 浊齿龈近音	# voiced alveolar approximant
+027A	齿龈边闪音	点 2 3 6 点 3 4 5 6 浊齿龈边闪音	# voiced alveolar lateral flap
+027B	卷舌近音	点 2 5 6 点 3 4 5 6 浊卷舌近音	# voiced retroflex approximant
+027D	卷舌闪音	点 2 5 6 点 1 2 3 5 浊卷舌闪音	# voiced retroflex flap
+027E	齿龈闪音	点 2 3 5 点 1 2 3 5 浊齿龈闪音	# voiced alveolar tap
+0280	小舌颤音	点 3 5 点 1 2 3 5 浊小舌颤音	# voiced uvular trill
+0281	浊小舌擦音	点 3 5 点 3 4 5 6 浊小舌擦音	# voiced uvular fricative
+0282	清卷舌擦音	点 2 5 6 点 2 3 4 清卷舌擦音	# voiceless retroflex fricative
+0283	清龈后擦音	点 1 5 6 清龈后擦音	# voiceless postalveolar fricative
+0284	浊硬腭内爆音	点 2 3 6 点 3 5 点 2 4 5 浊硬腭内爆音	# voiced palatal implosive
+0288	清卷舌塞音	点 2 5 6 点 2 3 4 5 清卷舌塞音	# voiceless retroflex plosive
+0289	闭央圆唇元音	点 3 5 6 点 1 3 6 闭央圆唇元音	# close central rounded vowel
+028A	次闭后圆唇元音	点 1 2 3 5 6 次闭次后圆唇元音	# near-close near-back rounded vowel (IPA Extensions here, greek upsilon is \x03C5)
+028B	唇齿近音	点 2 3 6 点 1 2 3 6 浊唇齿近音	# voiced labiodental approximant
+028C	半开后展唇元音	点 3 4 6 半开后不圆唇元音	# open-mid back unrounded vowel
+028D	清唇化软腭擦音	点 2 3 5 点 2 4 5 6 清唇化软腭擦音	# voiceless labial-velar fricative
+028E	硬腭边近音	点 2 3 6 点 1 3 4 5 6 浊硬腭边近音	# voiced palatal lateral approximant
+028F	次闭前圆唇元音	点 3 5 点 1 3 4 5 6 次闭次前圆唇元音	# near-close near-front rounded vowel
+0290	浊卷舌擦音	点 2 5 6 点 1 3 5 6 浊卷舌擦音	# voiced retroflex fricative
+0291	浊龈腭擦音	点 2 3 6 点 1 3 5 6 浊龈腭擦音	# voiced alveolopalatal fricative
+0292	浊龈后擦音	点 2 3 4 6 浊龈后擦音	# voiced postalveolar fricative
+0294	声门塞音	点 2 3 声门塞音	# glottal plosive
+0295	咽擦音近音	点 2 3 5 点 2 3 浊咽擦音近音	# voiced pharyngeal fricative or approximant
+0298	双唇搭嘴音	点 1 2 3 4 6 点 1 2 3 4 双唇搭嘴音	# bilabial click
+0299	双唇颤音	点 3 5 点 1 2 浊双唇颤音	# voiced bilabial trill
+029B	浊小舌内爆音	点 2 3 6 点 3 5 点 1 2 4 5 浊小舌内爆音	# voiced uvular implosive
+029C	清会厌擦音	点 3 5 点 1 2 5 清会厌擦音	# voiceless epiglottal fricative
+029D	浊硬腭擦音	点 2 3 6 点 2 4 5 浊硬腭擦音	# voiced palatal fricative
+029F	软腭边近音	点 3 5 点 1 2 3 浊软腭边近音	# voiced velar lateral approximant
+02A1	会厌塞音	点 2 3 6 点 2 3 会厌塞音	# epiglottal plosive
+02A2	浊会厌擦音	点 3 5 点 2 3 浊会厌擦音	# voiced epiglottal fricative
+02A3	浊齿龈塞擦音	点 1 4 5 点 5 点 1 3 5 6 浊齿龈塞擦音	# voiced alveolar affricate
+02A4	浊龈后塞擦音	点 1 4 5 点 5 点 2 3 4 6 浊龈后塞擦音	# voiced postalveolar affricate
+02A5	浊龈腭塞擦音	点 1 4 5 点 5 点 2 3 6 点 1 3 5 6 浊龈腭塞擦音	# voiced alveolopalatal affricate
+02A6	清齿龈塞擦音	点 2 3 4 5 点 5 点 2 3 4 清齿龈塞擦音	# voiceless alveolar affricate
+02A7	清龈后塞擦音	点 2 3 4 5 点 5 点 1 5 6 清龈后塞擦音	# voiceless postalveolar affricate
+02A8	清龈腭塞擦音	点 2 3 4 5 点 5 点 2 3 6 点 1 4 清龈腭塞擦音	# voiceless alveolopalatal affricate
+02B0	送气	点 4 点 1 2 5 送气	# aspirated
+02B2	腭化	点 4 点 2 4 5 腭化	# palatalized
+02B7	唇化	点 4 点 2 4 5 6 唇化	# labialized
+02BC	挤喉音	点 5 点 3 挤喉音	# ejective
+02C8	重音	点 4 5 6 点 1 2 重音	# (primary) stress
+02CC	次重音	点 4 5 6 点 2 3 次重音	# secondary stress
+02D0	长音	点 2 5 长音	# long
+02D1	半长	点 5 点 2 半长	# half-long
+02DE	卷舌色彩	点 5 点 1 2 3 5 卷舌色彩	# rhoticity
+02E0	软腭化	点 4 点 4 6 点 1 2 4 5 软腭化	# velarized
+02E1	边除阻	点 4 点 1 2 3 边除阻	# lateral release
+02E4	咽化	点 4 点 2 3 5 点 2 3 咽化	# pharyngealized
+02E5	超高平调	点 4 5 6 点 4 点 1 4 超高平调	# extra high level tone
+02E5 02E9	降调	点 4 5 6 点 1 6 降调	# falling contour tone
+02E6	高平调	点 4 5 6 点 1 4 高平调	# high level tone
+02E7	中平调	点 4 5 6 点 2 5 中平调	# mid level tone
+02E7 02E5	高升调	点 4 5 6 点 2 4 高升调	# high-rising contour tone
+02E8	低平调	点 4 5 6 点 3 6 低平调	# low level tone
+02E8 02E5 02E8	升降调	点 4 5 6 点 2 5 6 升降调	# rising-falling contour tone
+02E9	超低平调	点 4 5 6 点 6 点 3 6 超低平调	# extra low level tone
+02E9 02E5	升调	点 4 5 6 点 3 4 升调	# rising contour tone
+02E9 02E7	低升调	点 4 5 6 点 3 5 低升调	# low-rising contour tone
+0300	低平调	点 4 点 1 6 低平调	# low level tone
+0301	高平调	点 4 点 3 4 高平调	# high level tone
+0302	降调	点 4 点 1 4 6 降调	# falling contour tone
+0303	鼻化	点 4 点 1 2 4 5 6 鼻化	# nasalized
+0304	中平调	点 4 点 1 4 中平调	# mid level tone
+0306	极短	点 4 点 1 2 3 5 6 极短	# extra-short
+0308	央化	点 4 点 2 5 央化	# centralized
+030A	清化	点 4 点 1 2 4 6 清	# voiceless
+030B	超高平调	点 4 点 6 点 3 4 超高平调	# extra high level tone
+030C	升调	点 4 点 2 3 6 升调	# rising contour tone
+030F	超低平调	点 4 点 6 点 1 6 超低平调	# extra low level tone
+0318	舌根前移	点 6 点 1 5 6 舌根前移	# advanced tongue root
+0319	舌根后移	点 6 点 2 3 4 舌根后移	# retracted tongue root
+031A	不除阻	点 4 点 1 4 5 不除阻	# no audible release
+031C	更展唇	点 6 点 2 4 6 更展唇	# less rounded
+031D	升高	点 6 点 3 4 5 升高	# raised
+031E	降低	点 6 点 1 2 6 降低	# lowered
+031F	前移	点 6 点 3 4 6 前移	# advanced
+0320	后移	点 6 点 3 6 后移	# retracted
+0324	气声	点 6 点 2 5 气声	# breathy voiced
+0325	清化	点 6 点 1 2 4 6 清	# voiceless
+0329	成音节	点 6 点 2 3 成音节	# syllabic
+032A	齿	点 6 点 1 4 5 6 齿	# dental
+032C	浊化	点 6 点 2 3 6 浊	# voiced
+032F	非成音节	点 6 点 2 3 4 5 6 非成音节	# non-syllabic
+0330	嘎裂声	点 6 点 1 2 4 5 6 嘎裂声	# creaky voiced
+0334	软腭化咽化	点 5 点 1 2 4 5 6 软腭化咽化	# velarized or pharyngealized
+0339	更圆唇	点 6 点 1 3 5 更圆唇	# more rounded
+033A	舌尖	点 6 点 2 3 5 点 1 4 5 6 舌尖	# apical
+033B	舌叶	点 6 点 2 3 5 6 舌叶	# laminal
+033C	舌唇	点 6 点 1 2 3 4 6 舌唇	# linguolabial
+033D	半央化	点 4 点 1 3 4 6 半央化	# mid-centralized
+0361	塞擦连音	点 5 塞擦连音符	# affricate or double articulation
+1DC4	高升调	点 4 点 2 4 高升调	# high -rising contour tone
+1DC5	低升调	点 4 点 3 5 低升调	# low-rising contour tone
+1DC8	升降调	点 4 点 2 5 6 升降调	# rising-falling contour tone
+203F	连音	点 4 5 6 点 1 2 3 连音	# linking (absence of a break)
+2C71	唇齿闪音	点 2 3 5 点 1 2 3 6 唇齿闪音	# labiodental flap
