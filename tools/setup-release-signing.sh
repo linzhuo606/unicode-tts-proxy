@@ -7,6 +7,7 @@
 # 密钥和密码写在你的用户目录下，不进仓库。**务必另外备份这两个文件**：
 # 丢了它们，以后发的新版本签名对不上，所有用户都只能卸载重装。
 set -euo pipefail
+trap 'echo "出错了，停在第 $LINENO 行。GitHub 上的设置可能只做了一部分，修好后重跑即可。" >&2' ERR
 
 dir="$HOME/ttsproxy-signing"
 jks="$dir/release.jks"
@@ -23,8 +24,13 @@ command -v keytool >/dev/null || { echo "找不到 keytool，需要先装 JDK 17
 command -v gh >/dev/null || { echo "找不到 gh，需要先装 GitHub CLI 并登录"; exit 1; }
 
 mkdir -p "$dir"
-# 只用字母数字，免得不同 shell 转义出问题
-password=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)
+# 只用字母数字，免得不同 shell 转义出问题。
+# head 取够就关管道，tr 会因此收到 SIGPIPE；这一行得单独关掉 pipefail，否则脚本在这里一声不吭地退出
+password=$(set +o pipefail; LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)
+if [ ${#password} -ne 32 ]; then
+  echo "生成密码失败" >&2
+  exit 1
+fi
 
 keytool -genkeypair -v \
   -keystore "$jks" -storetype PKCS12 \
