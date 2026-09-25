@@ -20,8 +20,23 @@ alias_name="ttsproxy"
 command -v keytool >/dev/null || { echo "找不到 keytool，需要先装 JDK 17"; exit 1; }
 command -v gh >/dev/null || { echo "找不到 gh，需要先装 GitHub CLI 并登录"; exit 1; }
 
+# 这次运行的输出同时记一份，出错时不用再靠耳朵抓那一闪而过的报错。脚本从不打印密码和密钥。
+mkdir -p "$dir"
+log="$dir/last-run.log"
+exec > >(tee "$log") 2>&1
+echo "运行时间：$(date)  用户：$(whoami)  目录：$(pwd)"
+
 # 明确指定仓库，不依赖 gh 自己从当前目录去猜
-repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+if ! repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>&1); then
+  echo "查不到 GitHub 仓库。gh 的原话是："
+  echo "$repo"
+  echo "---- 诊断 ----"
+  gh auth status 2>&1 || true
+  git remote -v 2>&1 || true
+  git status --short 2>&1 | head -3 || true
+  echo "完整输出已记在 $log"
+  exit 1
+fi
 echo "目标仓库：$repo"
 
 if [ -e "$jks" ]; then
