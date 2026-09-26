@@ -61,6 +61,9 @@ object Diagnostics {
     /** 目标引擎此刻连不上，正在用别的顶着。锁屏那会儿就是这个状态。 */
     @Volatile var onFallback = false
 
+    /** 到本引擎自己的那条连接连上了谁。念出来不是本应用的包名，防冻结就没生效。 */
+    @Volatile var selfSessionEngine: String? = null
+
     /** 本进程启动时距开机多少秒。数值很大说明进程在用着用着的时候被杀过、重新拉起来了。 */
     val startedAtUptimeSec: Long = SystemClock.elapsedRealtime() / 1000
 
@@ -158,6 +161,9 @@ object Diagnostics {
             }
             append("。")
         }
+        append("　防冻结连接：")
+        append(selfSessionEngine?.let { "已连上 " + it } ?: "还没连上")
+        append("。")
         append("　本进程在开机后第 ").append(startedAtUptimeSec).append(" 秒启动")
         if (launchesThisBoot > 0) {
             append("，是本次开机后第 ").append(launchesThisBoot).append(" 次启动")

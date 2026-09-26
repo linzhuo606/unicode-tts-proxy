@@ -161,17 +161,20 @@ class ProxyTtsService : TextToSpeechService() {
         if (selfSession != null || !Prefs.selfSession(this)) return
         runCatching {
             val started = SystemClock.elapsedRealtime()
+            // 必须点名连本引擎。0.2.0 曾用「系统默认引擎」，卸载重装后系统默认引擎不再是本引擎，
+            // 这条连接就连到别处去了，冻结随之复发。
             selfSession = TextToSpeech(applicationContext, { status ->
                 val engine = runCatching {
                     TextToSpeech::class.java.getMethod("getCurrentEngine").invoke(selfSession) as? String
                 }.getOrNull()
+                Diagnostics.selfSessionEngine = if (status == TextToSpeech.SUCCESS) (engine ?: "读不到包名") else "失败 " + status
                 Log.i(
                     TAG,
                     "到自己的连接 onInit status=" + status + " 连上的引擎=" + engine +
                         " 用时=" + (SystemClock.elapsedRealtime() - started) + "ms",
                 )
-            })
-            Log.i(TAG, "已发起到自己的连接（旧版行为）")
+            }, packageName)
+            Log.i(TAG, "已发起到自己的连接")
         }.onFailure { Log.w(TAG, "建到自己的连接失败", it) }
     }
 
