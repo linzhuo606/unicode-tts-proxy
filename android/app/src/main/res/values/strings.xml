@@ -43,6 +43,8 @@
     <string name="debug_empty">请先输入文本</string>
     <string name="debug_diagnostics_label">运行诊断</string>
     <string name="debug_reset_diagnostics">清零诊断计数</string>
+    <string name="pref_log_text_title">日志里记录朗读文本</string>
+    <string name="pref_log_text_summary">只在排查问题时打开。打开后运行日志会记下每句朗读的前几十个字，分享日志前请留意里面有没有不想给别人看的内容。排查完记得关掉。</string>
     <string name="debug_log_label">运行日志。进程一启动就开始记，不需要打开本应用。复制后粘贴发给开发者即可，里面不含朗读的文本。</string>
     <string name="debug_copy_log">复制日志到剪贴板</string>
     <string name="debug_share_log">分享日志</string>

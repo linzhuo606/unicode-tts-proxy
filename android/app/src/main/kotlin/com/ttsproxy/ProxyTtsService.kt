@@ -358,7 +358,11 @@ class ProxyTtsService : TextToSpeechService() {
         // onStop 得能找到它、把它叫醒，否则后面每一句都要跟着干等。
         val session = Session(Diagnostics.utterances.incrementAndGet(), raw.length, caller)
         activeSession.set(session)
-        Tlog.i(TAG, "第 " + session.seq + " 句开始 字数=" + raw.length + " 来源=" + caller)
+        Tlog.i(
+            TAG,
+            "第 " + session.seq + " 句开始 字数=" + raw.length + " 来源=" + caller +
+                (if (Prefs.logText(this)) " 文本=" + raw.take(LOG_TEXT_CHARS).replace('\n', ' ') else ""),
+        )
         try {
             // 第 2、3 层防护：运行时硬校验 + 环路探针。
             // 永远不信配置里的值——它可能来自备份恢复、旧版本导入，或者 adb 直接改的。
@@ -868,6 +872,9 @@ class ProxyTtsService : TextToSpeechService() {
         const val KEY_PROXY_TRACE = "com.ttsproxy.TRACE"
 
         private const val DEFAULT_SAMPLE_RATE = 16000
+
+        /** 开了「日志里记录朗读文本」时每句最多记多少字。 */
+        private const val LOG_TEXT_CHARS = 60
 
         /**
          * 手里一个能出声的引擎都没有时，这一句最多等下游连上多久。

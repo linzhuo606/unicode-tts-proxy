@@ -55,6 +55,12 @@
 
         <SwitchPreferenceCompat
             app:defaultValue="false"
+            app:key="log_text"
+            app:summary="@string/pref_log_text_summary"
+            app:title="@string/pref_log_text_title" />
+
+        <SwitchPreferenceCompat
+            app:defaultValue="false"
             app:key="compat_mode"
             app:summary="@string/pref_compat_summary"
             app:title="@string/pref_compat_title" />

@@ -28,6 +28,7 @@ object Prefs {
     const val KEY_DETAIL_SINGLE = "detail_single_emoji"
     const val KEY_LAST_GOOD = "last_good_engine"
     const val KEY_IPA_BRAILLE = "ipa_braille"
+    const val KEY_LOG_TEXT = "log_text"
 
     fun storageContext(context: Context): Context =
         context.createDeviceProtectedStorageContext()
@@ -66,6 +67,13 @@ object Prefs {
      */
     fun detailSingleEmoji(context: Context): Boolean =
         of(context).getBoolean(KEY_DETAIL_SINGLE, true)
+
+    /**
+     * 排查开关：运行日志里记下每句朗读的前几十个字。默认关——引擎听得到锁屏时输入的每一个字，
+     * 日志默认不能带文本。用户排查「读着读着停了」这类问题时手动打开，用完关掉。
+     */
+    fun logText(context: Context): Boolean =
+        of(context).getBoolean(KEY_LOG_TEXT, false)
 
     /** 兼容模式：走「直通」链路而不是「流式截获」，给个别 onAudioAvailable 有 bug 的引擎兜底。 */
     fun compatMode(context: Context): Boolean =
