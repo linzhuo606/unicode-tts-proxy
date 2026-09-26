@@ -90,6 +90,7 @@ object Diagnostics {
         val chars: Int,
         val chunk: Int,
         val chunks: Int,
+        val caller: String,
         val reason: EndReason,
         val detail: String?,
         val engine: String?,
@@ -178,6 +179,7 @@ object Diagnostics {
                 append("\n第 ").append(r.seq).append(" 句，")
                 append(r.chars).append(" 字")
                 if (r.chunks > 1) append("，第 ").append(r.chunk).append(" 块，共 ").append(r.chunks).append(" 块")
+                append("，来自 ").append(r.caller)
                 append("，").append(r.reason.label)
                 r.detail?.let { append("（").append(it).append("）") }
                 append("，用时 ").append(String.format("%.1f", r.elapsedMs / 1000.0)).append(" 秒")

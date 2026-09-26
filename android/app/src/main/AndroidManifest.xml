@@ -89,6 +89,17 @@
             android:label="@string/debug_title"
             android:parentActivityName=".SettingsActivity" />
 
+        <!-- 只用来把日志文件分享出去 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <activity
             android:name=".DictActivity"
             android:exported="false"

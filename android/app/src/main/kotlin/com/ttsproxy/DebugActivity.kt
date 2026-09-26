@@ -11,6 +11,7 @@ import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import com.ttsproxy.core.TextPipeline
 import com.ttsproxy.core.Verbosity
 
@@ -31,6 +32,7 @@ class DebugActivity : AppCompatActivity() {
         setContentView(R.layout.activity_debug)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
+        Tlog.i("DebugActivity", "检查朗读效果 界面打开")
         pipeline = TextPipeline(DictLoader.load(this))
         speaker = SelfSpeaker(this)
 
@@ -59,16 +61,19 @@ class DebugActivity : AppCompatActivity() {
             announce(copyLog, if (ok) getString(R.string.debug_log_copied, lines) else "复制失败")
         }
         findViewById<Button>(R.id.share_log).setOnClickListener {
-            val text = Tlog.snapshot()
-            if (text.isBlank()) {
+            // 发文件而不是发文本：剪贴板那条路有大小上限，文件没有，开机那一段不会被截掉
+            val file = Tlog.exportFile(this)
+            if (file == null || file.length() == 0L) {
                 announce(it, getString(R.string.debug_log_empty))
                 return@setOnClickListener
             }
             runCatching {
+                val uri = FileProvider.getUriForFile(this, packageName + ".files", file)
                 val send = Intent(Intent.ACTION_SEND)
                     .setType("text/plain")
                     .putExtra(Intent.EXTRA_SUBJECT, "Unicode 朗读中转 日志")
-                    .putExtra(Intent.EXTRA_TEXT, text)
+                    .putExtra(Intent.EXTRA_STREAM, uri)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 startActivity(Intent.createChooser(send, getString(R.string.debug_share_log)))
             }.onFailure { e -> Toast.makeText(this, "分享失败：" + e.message, Toast.LENGTH_LONG).show() }
         }
@@ -93,6 +98,7 @@ class DebugActivity : AppCompatActivity() {
             }
             val processed = pipeline.transformSafe(raw, verbosity)
             result.text = processed
+            Tlog.i("DebugActivity", "点了 处理并朗读，原文 " + raw.length + " 字，处理后 " + processed.length + " 字")
             speaker?.speak(processed)
             // 朗读完再刷新，这样试听后立刻能听到有没有出问题
             result.postDelayed({ refreshDiagnostics() }, DIAGNOSTICS_REFRESH_MS)
@@ -130,6 +136,7 @@ class DebugActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        Tlog.i("DebugActivity", "检查朗读效果 界面关闭")
         speaker?.shutdown()
         speaker = null
         super.onDestroy()

@@ -48,12 +48,14 @@ class SelfSpeaker(context: Context) {
 
     private fun speakNow(text: String) {
         val engine = tts ?: return
+        Tlog.i("SelfSpeaker", "本应用试听 " + text.length + " 字（QUEUE_FLUSH）")
         runCatching {
             engine.speak(text, TextToSpeech.QUEUE_FLUSH, Bundle(), "selftest-" + ids.incrementAndGet())
         }
     }
 
     fun shutdown() {
+        Tlog.i("SelfSpeaker", "本应用试听客户端 stop + shutdown")
         runCatching { tts?.stop() }
         runCatching { tts?.shutdown() }
         tts = null

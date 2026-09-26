@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.os.Bundle
+import android.os.Process
 import android.os.SystemClock
 import android.speech.tts.SynthesisCallback
 import android.speech.tts.SynthesisRequest
@@ -93,7 +94,7 @@ class ProxyTtsService : TextToSpeechService() {
      */
     @Volatile private var fallbackEngine: String? = null
 
-    private class Session(val seq: Int, val chars: Int) {
+    private class Session(val seq: Int, val chars: Int, val caller: String) {
         @Volatile var pipe: PcmPipe? = null
         @Volatile var stopped = false
 
@@ -120,7 +121,7 @@ class ProxyTtsService : TextToSpeechService() {
         }
 
         fun toRecord(): Diagnostics.Record = Diagnostics.Record(
-            seq, chars, chunk, chunks,
+            seq, chars, chunk, chunks, caller,
             reason ?: Diagnostics.EndReason.DONE, detail,
             engine, standIn,
             SystemClock.elapsedRealtime() - startedAt,
@@ -340,9 +341,12 @@ class ProxyTtsService : TextToSpeechService() {
     private fun synthesize(request: SynthesisRequest?, callback: SynthesisCallback) {
         val raw = runCatching { request?.charSequenceText?.toString() }.getOrNull().orEmpty()
 
+        val caller = callerLabel(request)
         // TalkBack 的打断方式是 speak("", QUEUE_DESTROY)，所以空串会非常频繁地进来。
         // 必须短路，不然会把一堆空请求转发给下游。
         if (raw.isBlank()) {
+            // QUEUE_DESTROY 会把所有客户端正在读的一句全停掉，所以空请求本身就是线索，记一行
+            Tlog.i(TAG, "空请求（多半是打断） 来源=" + caller)
             emitSilence(callback)
             return
         }
@@ -352,8 +356,9 @@ class ProxyTtsService : TextToSpeechService() {
 
         // 会话从这里就要登记上：等下游连上最多要好几秒，这期间用户划走，
         // onStop 得能找到它、把它叫醒，否则后面每一句都要跟着干等。
-        val session = Session(Diagnostics.utterances.incrementAndGet(), raw.length)
+        val session = Session(Diagnostics.utterances.incrementAndGet(), raw.length, caller)
         activeSession.set(session)
+        Tlog.i(TAG, "第 " + session.seq + " 句开始 字数=" + raw.length + " 来源=" + caller)
         try {
             // 第 2、3 层防护：运行时硬校验 + 环路探针。
             // 永远不信配置里的值——它可能来自备份恢复、旧版本导入，或者 adb 直接改的。
@@ -388,7 +393,7 @@ class ProxyTtsService : TextToSpeechService() {
                 "第 " + record.seq + " 句结束: " + record.reason.label +
                     (record.detail?.let { "(" + it + ")" } ?: "") +
                     " 字数=" + record.chars + " 块=" + record.chunk + "/" + record.chunks +
-                    " 用时=" + record.elapsedMs + "ms 引擎=" + record.engine +
+                    " 用时=" + record.elapsedMs + "ms 来源=" + record.caller + " 引擎=" + record.engine +
                     (if (record.standIn) "(顶替)" else "") + " stopped=" + session.stopped,
             )
         }
@@ -823,6 +828,17 @@ class ProxyTtsService : TextToSpeechService() {
             }
         }
         if (lazyDownstream.isInitialized()) runCatching { downstream.stopNow() }
+    }
+
+    /**
+     * 这一句是谁发来的。本应用自己（试听、调试界面）和 TalkBack 是两个客户端，
+     * 一个客户端的 QUEUE_DESTROY 会把另一个正在读的句子也停掉，查「读着读着没了」必须分清。
+     */
+    private fun callerLabel(request: SynthesisRequest?): String {
+        val uid = runCatching { request?.callerUid }.getOrNull() ?: return "未知"
+        if (uid == Process.myUid()) return "本应用"
+        val pkgs = runCatching { packageManager.getPackagesForUid(uid) }.getOrNull()
+        return (pkgs?.firstOrNull() ?: "uid") + "(" + uid + ")"
     }
 
     /** 起一次空合成：让上游拿到 onStart / onDone，状态机不至于错乱。 */

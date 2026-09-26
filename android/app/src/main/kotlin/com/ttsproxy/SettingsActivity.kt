@@ -18,6 +18,7 @@ class SettingsActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Tlog.i("SettingsActivity", "设置界面打开")
         setContentView(R.layout.activity_settings)
         if (savedInstanceState == null) {
             supportFragmentManager.beginTransaction()
@@ -136,6 +137,7 @@ class SettingsActivity : AppCompatActivity() {
             }
 
         override fun onDestroy() {
+            Tlog.i("SettingsActivity", "设置界面关闭")
             preferenceManager.sharedPreferences
                 ?.unregisterOnSharedPreferenceChangeListener(mirrorListener)
             speaker?.shutdown()

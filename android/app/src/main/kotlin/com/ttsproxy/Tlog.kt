@@ -36,8 +36,24 @@ object Tlog {
     private const val FILE_NAME = "trace.log"
     private const val MAX_BYTES = 2L * 1024 * 1024
 
-    /** 复制到剪贴板时最多带多少字节：binder 单次事务约 1MB，留足余量。 */
+    /** 复制到剪贴板时最多带多少字节：binder 单次事务约 1MB，留足余量。分享走文件，不受这个限制。 */
     const val SNAPSHOT_BYTES = 400 * 1024
+
+    /** 完整日志文件，给分享用。两份文件按时间顺序拼成一份临时文件。 */
+    fun exportFile(context: Context): File? {
+        val d = dir ?: return null
+        synchronized(lock) { runCatching { writer?.flush() } }
+        val out = File(context.cacheDir, "ttsproxy-log.txt")
+        return runCatching {
+            out.outputStream().use { o ->
+                for (name in listOf("$FILE_NAME.1", FILE_NAME)) {
+                    val f = File(d, name)
+                    if (f.exists()) f.inputStream().use { it.copyTo(o) }
+                }
+            }
+            out
+        }.getOrNull()
+    }
 
     private val stamp = SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US)
 
@@ -185,7 +201,7 @@ object Tlog {
                 BufferedReader(InputStreamReader(proc.inputStream, Charsets.UTF_8)).useLines { lines ->
                     for (line in lines) {
                         if (line.isEmpty() || line.startsWith("--------- beginning")) continue
-                        if (isOwnLine(line)) continue
+                        if (!worthKeeping(line)) continue
                         appendRaw("  logcat| $line\n")
                     }
                 }
@@ -194,19 +210,47 @@ object Tlog {
         }, "tts-proxy-logcat").apply { isDaemon = true }.start()
     }
 
-    /** threadtime 格式：`日期 时间 pid tid 级别 tag: 消息`。tag 是我们自己的就跳过。 */
-    private fun isOwnLine(line: String): Boolean {
-        // 跳过前五个字段后是 "TAG: msg"
+    /**
+     * 只留有用的 logcat 行。第一版什么都收，结果每句话都带十几行 AudioTrack/PlayerBase
+     * 的系统噪音，四百 KB 的上限被噪音撑满，开机那一段反而被截掉了。
+     *
+     * threadtime 格式：`日期 时间 pid tid 级别 tag: 消息`。
+     */
+    private fun worthKeeping(line: String): Boolean {
+        // 跳过前四个字段（日期 时间 pid tid），然后是级别，再是 "TAG: msg"
         var idx = 0
         var fields = 0
-        while (fields < 5 && idx < line.length) {
+        while (fields < 4 && idx < line.length) {
             while (idx < line.length && line[idx] != ' ') idx++
             while (idx < line.length && line[idx] == ' ') idx++
             fields++
         }
+        if (idx >= line.length) return false
+        val level = line[idx]
+        idx++
+        while (idx < line.length && line[idx] == ' ') idx++
         val colon = line.indexOf(':', idx)
         if (colon <= idx) return false
         val tag = line.substring(idx, colon).trim()
-        return synchronized(ownTags) { tag in ownTags }
+        if (synchronized(ownTags) { tag in ownTags }) return false
+        if (tag in NOISY_TAGS) return false
+        if (tag in WANTED_TAGS) return true
+        // 其余只留错误和致命：崩溃、ANR、进程被杀的痕迹都在这两级里
+        return level == 'E' || level == 'F'
     }
+
+    /** 框架里和 TTS 直接相关的 tag，不管级别都留。 */
+    private val WANTED_TAGS = setOf(
+        "TextToSpeech", "TextToSpeechService", "TtsEngines", "TextToSpeechManager",
+        "AudioPlaybackHandler", "BlockingAudioTrack", "SynthesisPlaybackQueueItem",
+        "PlaybackSynthesisRequest", "FileSynthesisRequest", "AudioPlaybackQueueItem",
+        "AndroidRuntime", "System.err", "LifecycleTransaction", "ActivityThread",
+    )
+
+    /** 每句话都刷十几行、又从来不说明问题的系统 tag。 */
+    private val NOISY_TAGS = setOf(
+        "AudioTrack", "android.media.AudioTrack", "AudioTrack-JNI", "PlayerBase", "AudioSystem",
+        "OpenGLRenderer", "HwAdaptiveFrameManager", "HwViewRootImpl", "ViewRootImpl", "DecorView",
+        "InputMethodManager", "InsetsSourceConsumer", "libEGL",
+    )
 }
