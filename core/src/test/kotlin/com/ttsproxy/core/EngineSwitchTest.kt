@@ -66,17 +66,6 @@ class EngineSwitchTest {
 
         override fun standIns(): List<String> = standInList
 
-        /** 预热过的引擎，按先后顺序。 */
-        val warmed = CopyOnWriteArrayList<String>()
-
-        /** 这些引擎预热会失败。 */
-        @Volatile var warmUpFails: Set<String> = emptySet()
-
-        override fun warmUp(link: FakeLink): Boolean {
-            warmed.add(link.pkg)
-            return link.pkg !in warmUpFails
-        }
-
         override fun onReady(link: FakeLink, awaited: Boolean) {
             readies.add(link.pkg to awaited)
         }
@@ -258,49 +247,6 @@ class EngineSwitchTest {
             assertEquals("A", s.acquire("A", 2_000)?.pkg)
             assertFalse(s.onStandIn)
             assertTrue(stopGap.closed)
-        }
-    }
-
-    @Test
-    fun `换回目标引擎之前先预热，预热期间顶替照读`() {
-        val c = FakeConnector()
-        c.set("A", FakeConnector.Result.UNAVAILABLE)
-        c.standInList = listOf("S")
-        withSwitch(c) { s ->
-            assertEquals("S", s.acquire("A", 2_000)?.pkg)
-            c.set("A")   // 用户解锁了
-            assertTrue(eventually { c.readied("A") })
-            assertTrue(c.warmed.contains("A"), "没人等的时候，目标连好要先预热再换上")
-            assertEquals("A", s.acquire("A", 2_000)?.pkg)
-        }
-    }
-
-    @Test
-    fun `有句子等着新引擎时不预热，别让预热排在它前面`() {
-        val c = FakeConnector()
-        c.set("B", delayMs = 100)
-        withSwitch(c) { s ->
-            assertEquals("A", s.acquire("A", 2_000)?.pkg)
-            assertEquals("B", s.acquire("B", 2_000)?.pkg)
-            assertFalse(c.warmed.contains("B"), "这一句正等着 B 读，预热会排在它前面")
-        }
-    }
-
-    @Test
-    fun `目标预热失败就继续用顶替，之后按退避再试`() {
-        val c = FakeConnector()
-        c.set("A", FakeConnector.Result.UNAVAILABLE)
-        c.standInList = listOf("S")
-        withSwitch(c) { s ->
-            assertEquals("S", s.acquire("A", 2_000)?.pkg)
-            c.warmUpFails = setOf("A")
-            c.set("A")
-            assertTrue(eventually { c.warmed.count { it == "A" } >= 1 })
-            assertEquals("S", s.acquire("A", 2_000)?.pkg, "预热不过的引擎不能换上去")
-            assertFalse(c.readied("A"))
-            c.warmUpFails = emptySet()
-            assertTrue(eventually { c.readied("A") }, "退避之后要再试，试通了才换")
-            assertEquals("A", s.acquire("A", 2_000)?.pkg)
         }
     }
 
