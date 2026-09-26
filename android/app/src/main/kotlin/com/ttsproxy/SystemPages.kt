@@ -13,19 +13,6 @@ import android.provider.Settings
 object SystemPages {
 
     /**
-     * 系统的「文字转语音输出」页面，用户在那里把首选引擎改成本应用。
-     * 不同厂商的入口不一样，挨个试；都没有就退到无障碍设置。
-     */
-    fun openTtsSettings(context: Context): Boolean {
-        val candidates = listOf(
-            Intent("com.android.settings.TTS_SETTINGS"),
-            Intent().setClassName("com.android.settings", "com.android.settings.Settings\$TextToSpeechSettingsActivity"),
-            Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS),
-        )
-        return candidates.any { start(context, it) }
-    }
-
-    /**
      * 华为等系统的「应用启动管理」。本应用在那里必须是手动管理并放开三项，
      * 否则开机后会被系统冻住几秒，朗读读到一半没声；每次卸载重装都会被清回自动管理。
      * 不同机型类名不同，挨个试；都没有就退到本应用的应用信息页。

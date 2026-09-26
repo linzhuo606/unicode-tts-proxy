@@ -63,60 +63,12 @@
             android:textSize="16sp" />
 
         <Button
-            android:id="@+id/open_tts_settings"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:minHeight="48dp"
-            android:text="@string/onboard_step2_button"
-            android:textSize="18sp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="@string/onboard_step3_title"
-            android:textSize="20sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/onboard_step3_text"
-            android:textSize="16sp" />
-
-        <Button
             android:id="@+id/open_startup"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:minHeight="48dp"
-            android:text="@string/onboard_step3_button"
-            android:textSize="18sp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="@string/onboard_step4_title"
-            android:textSize="20sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/onboard_step4_text"
-            android:textSize="16sp" />
-
-        <Button
-            android:id="@+id/test_speak"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:minHeight="48dp"
-            android:text="@string/onboard_step4_button"
+            android:text="@string/onboard_step2_button"
             android:textSize="18sp" />
 
         <Button
