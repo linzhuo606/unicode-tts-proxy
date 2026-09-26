@@ -83,6 +83,13 @@
             </intent-filter>
         </activity>
 
+        <!-- 首次设置向导。装好后第一次打开设置时弹出，之后从设置里手动打开。 -->
+        <activity
+            android:name=".OnboardingActivity"
+            android:exported="false"
+            android:label="@string/onboard_title"
+            android:parentActivityName=".SettingsActivity" />
+
         <activity
             android:name=".DebugActivity"
             android:exported="false"

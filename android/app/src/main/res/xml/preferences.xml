@@ -60,6 +60,11 @@
             app:title="@string/pref_compat_title" />
 
         <Preference
+            app:key="open_onboarding"
+            app:summary="@string/pref_onboard_summary"
+            app:title="@string/pref_onboard_title" />
+
+        <Preference
             app:key="open_startup_manager"
             app:summary="@string/pref_startup_summary"
             app:title="@string/pref_startup_title" />

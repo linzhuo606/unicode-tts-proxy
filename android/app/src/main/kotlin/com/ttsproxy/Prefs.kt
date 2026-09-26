@@ -27,6 +27,7 @@ object Prefs {
     const val KEY_COMPAT_MODE = "compat_mode"
     const val KEY_DETAIL_SINGLE = "detail_single_emoji"
     const val KEY_LAST_GOOD = "last_good_engine"
+    const val KEY_ONBOARDED = "onboarded"
     const val KEY_IPA_BRAILLE = "ipa_braille"
 
     fun storageContext(context: Context): Context =
@@ -66,6 +67,17 @@ object Prefs {
      */
     fun detailSingleEmoji(context: Context): Boolean =
         of(context).getBoolean(KEY_DETAIL_SINGLE, true)
+
+    /**
+     * 首次设置向导是否已经走完。存在设备保护存储里，卸载重装会清掉——正好：
+     * 重装之后系统的「应用启动管理」也被清了，向导要再走一遍。
+     */
+    fun onboarded(context: Context): Boolean =
+        of(context).getBoolean(KEY_ONBOARDED, false)
+
+    fun setOnboarded(context: Context, done: Boolean) {
+        of(context).edit().putBoolean(KEY_ONBOARDED, done).commit()
+    }
 
     /** 兼容模式：走「直通」链路而不是「流式截获」，给个别 onAudioAvailable 有 bug 的引擎兜底。 */
     fun compatMode(context: Context): Boolean =
