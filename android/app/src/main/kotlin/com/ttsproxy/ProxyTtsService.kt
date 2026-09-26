@@ -192,6 +192,40 @@ class ProxyTtsService : TextToSpeechService() {
         if (key == Prefs.KEY_KEEP_ALIVE) {
             if (Prefs.keepAliveWanted(this)) ensureForeground("设置里改了") else leaveForeground()
         }
+        if (key == Prefs.KEY_SELF_SESSION) {
+            if (Prefs.selfSession(this)) openSelfSession() else closeSelfSession()
+        }
+    }
+
+    /**
+     * 复刻旧版的那条「到自己的连接」，见 [Prefs.selfSession]。一直持有，不 shutdown。
+     * 旧版是 shutdown 了但没断成；这里干脆明着留住，效果一样、更好解释。
+     */
+    @Volatile private var selfSession: TextToSpeech? = null
+
+    private fun openSelfSession() {
+        if (selfSession != null || !Prefs.selfSession(this)) return
+        runCatching {
+            val started = SystemClock.elapsedRealtime()
+            selfSession = TextToSpeech(applicationContext, { status ->
+                val engine = runCatching {
+                    TextToSpeech::class.java.getMethod("getCurrentEngine").invoke(selfSession) as? String
+                }.getOrNull()
+                Tlog.i(
+                    TAG,
+                    "到自己的连接 onInit status=" + status + " 连上的引擎=" + engine +
+                        " 用时=" + (SystemClock.elapsedRealtime() - started) + "ms",
+                )
+            })
+            Tlog.i(TAG, "已发起到自己的连接（旧版行为）")
+        }.onFailure { Tlog.w(TAG, "建到自己的连接失败", it) }
+    }
+
+    private fun closeSelfSession() {
+        val s = selfSession ?: return
+        selfSession = null
+        runCatching { s.shutdown() }
+        Tlog.i(TAG, "已断开到自己的连接")
     }
 
     /**
@@ -286,6 +320,8 @@ class ProxyTtsService : TextToSpeechService() {
         Tlog.i(TAG, "服务 onCreate，配置的下游=" + runCatching { Prefs.downstreamEngine(this) }.getOrNull())
         runCatching { startFeedWatchdog() }.onFailure { Tlog.w(TAG, "回灌看门狗启动失败", it) }
         if (Prefs.keepAliveWanted(this)) ensureForeground("服务启动")
+        // 旧版在这个时机建探针。放在主线程发起即可，连接是异步的
+        openSelfSession()
         runCatching { scheduleBootWindowEnd() }.onFailure { Tlog.w(TAG, "开机保护期计时失败", it) }
         runCatching { Prefs.of(this).registerOnSharedPreferenceChangeListener(engineChoiceListener) }
             .onFailure { Tlog.e(TAG, "监听发声引擎设置失败", it) }
@@ -311,6 +347,7 @@ class ProxyTtsService : TextToSpeechService() {
     override fun onDestroy() {
         Tlog.w(TAG, "服务 onDestroy")
         leaveForeground()
+        closeSelfSession()
         runCatching { Prefs.of(this).unregisterOnSharedPreferenceChangeListener(engineChoiceListener) }
         // 用 isInitialized 判断，避免为了关闭反而把 lazy 触发出来
         if (lazyDownstream.isInitialized()) runCatching { downstream.shutdown() }

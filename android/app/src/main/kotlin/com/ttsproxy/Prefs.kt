@@ -30,6 +30,7 @@ object Prefs {
     const val KEY_IPA_BRAILLE = "ipa_braille"
     const val KEY_LOG_TEXT = "log_text"
     const val KEY_KEEP_ALIVE = "keep_alive_mode"
+    const val KEY_SELF_SESSION = "self_session"
 
     fun storageContext(context: Context): Context =
         context.createDeviceProtectedStorageContext()
@@ -84,7 +85,15 @@ object Prefs {
      * 每五秒查一次包管理器的心跳试过了，照样被冻。前台服务是所有厂商都认的「别冻我」信号。
      */
     fun keepAliveMode(context: Context): String =
-        of(context).getString(KEY_KEEP_ALIVE, KEEP_ALIVE_BOOT) ?: KEEP_ALIVE_BOOT
+        of(context).getString(KEY_KEEP_ALIVE, KEEP_ALIVE_OFF) ?: KEEP_ALIVE_OFF
+
+    /**
+     * 复刻排查前版本的一个副作用：服务启动时建一个到系统默认引擎（就是本引擎）的 TextToSpeech，
+     * 那版建完立刻 shutdown，但那时会话还没建立，shutdown 什么也没断掉，系统那头的会话就永远留着。
+     * 那个版本重启后从没被冻结过，新版没有这条连接就被冻。先复刻回来验证是不是它在起作用。
+     */
+    fun selfSession(context: Context): Boolean =
+        of(context).getBoolean(KEY_SELF_SESSION, true)
 
     /** 此刻要不要处在前台服务状态。 */
     fun keepAliveWanted(context: Context): Boolean = when (keepAliveMode(context)) {

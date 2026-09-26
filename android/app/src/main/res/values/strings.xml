@@ -43,6 +43,8 @@
     <string name="debug_empty">请先输入文本</string>
     <string name="debug_diagnostics_label">运行诊断</string>
     <string name="debug_reset_diagnostics">清零诊断计数</string>
+    <string name="pref_self_session_title">保留一条到本引擎的连接（旧版行为）</string>
+    <string name="pref_self_session_summary">排查前的版本启动时会建一个到系统默认引擎（就是本引擎）的连接且从不断开，那个版本从没被冻结过。这里把它复刻回来验证。默认开。</string>
     <string name="pref_keep_alive_title">防止系统冻结</string>
     <string name="pref_keep_alive_summary">开机后一两分钟，系统会把闲着的后台应用冻住几秒，朗读就读到一半没声。以前台服务运行能防住，代价是通知栏里有一条无声通知。默认只在开机后十分钟内这样做，之后通知自动消失。</string>
     <string name="keep_alive_boot">开机后十分钟内</string>
