@@ -82,40 +82,5 @@
             android:minHeight="48dp"
             android:text="@string/debug_reset_diagnostics"
             android:textSize="18sp" />
-
-        <TextView
-            android:id="@+id/label_log"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="@string/debug_log_label"
-            android:textSize="16sp" />
-
-        <Button
-            android:id="@+id/copy_log"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:minHeight="48dp"
-            android:text="@string/debug_copy_log"
-            android:textSize="18sp" />
-
-        <Button
-            android:id="@+id/share_log"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:minHeight="48dp"
-            android:text="@string/debug_share_log"
-            android:textSize="18sp" />
-
-        <Button
-            android:id="@+id/clear_log"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:minHeight="48dp"
-            android:text="@string/debug_clear_log"
-            android:textSize="18sp" />
     </LinearLayout>
 </ScrollView>

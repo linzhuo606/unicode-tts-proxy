@@ -1,14 +1,6 @@
 package com.ttsproxy
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.content.Intent
 import android.content.SharedPreferences
-import android.content.pm.ServiceInfo
-import androidx.core.app.NotificationCompat
-import androidx.core.app.ServiceCompat
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.os.Bundle
@@ -19,6 +11,7 @@ import android.speech.tts.SynthesisRequest
 import android.speech.tts.TextToSpeech
 import android.speech.tts.TextToSpeechService
 import android.speech.tts.Voice
+import android.util.Log
 import com.ttsproxy.core.Chunker
 import com.ttsproxy.core.DiacriticFold
 import com.ttsproxy.core.PcmFramer
@@ -78,7 +71,7 @@ class ProxyTtsService : TextToSpeechService() {
         if (hit != null && cachedDictVersion == wanted && cachedIpaBraille == braille) return hit
         val built = runCatching { TextPipeline(DictLoader.load(this)) }
             .getOrElse {
-                Tlog.e(TAG, "词典载入失败，降级为不替换", it)
+                Log.e(TAG, "词典载入失败，降级为不替换", it)
                 TextPipeline.withoutDict()
             }
         cachedPipeline = built
@@ -89,47 +82,6 @@ class ProxyTtsService : TextToSpeechService() {
 
     private val activeSession = AtomicReference<Session?>(null)
     private val passthroughIds = AtomicLong()
-
-    /**
-     * 回灌看门狗。真机上抓到过：下游音频早就到齐，可上游的 audioAvailable 一卡就是五秒——
-     * 框架自己的音轨活着却不吃数据，用户听到的就是「读着读着没声了」。
-     * 那段时间我们卡在框架里出不来，只能由另一条线程来记下卡住的起止时刻，好和系统事件对时间。
-     */
-    @Volatile private var feedStartedAt = 0L
-    @Volatile private var feedSeq = 0
-
-    private fun startFeedWatchdog() {
-        Thread({
-            // 正在盯着的那一次调用的开始时刻，以及上一次报告的时刻
-            var watching = 0L
-            var lastReport = 0L
-            while (true) {
-                try {
-                    Thread.sleep(FEED_WATCH_SLICE_MS)
-                } catch (e: InterruptedException) {
-                    return@Thread
-                }
-                val since = feedStartedAt
-                if (since == 0L) {
-                    watching = 0L
-                    continue
-                }
-                val now = SystemClock.elapsedRealtime()
-                val stuck = now - since
-                if (stuck < FEED_STALL_MS) continue
-                if (since != watching) {
-                    // 新的一次卡住：第一次报告
-                    watching = since
-                    lastReport = now
-                    Diagnostics.event("第 " + feedSeq + " 句回灌卡住，上游音轨不吃数据")
-                    Tlog.w(TAG, "回灌卡住 " + stuck + "ms（第 " + feedSeq + " 句），上游音轨不吃数据")
-                } else if (now - lastReport >= FEED_REPORT_EVERY_MS) {
-                    lastReport = now
-                    Tlog.w(TAG, "回灌仍卡着 " + stuck + "ms（第 " + feedSeq + " 句）")
-                }
-            }
-        }, "tts-proxy-feed-watch").apply { isDaemon = true }.start()
-    }
 
     /** 上游选中的声音，由 onLoadVoice 记录，在 onSynthesizeText 里才真正生效。 */
     @Volatile private var pendingVoice: String? = null
@@ -187,10 +139,7 @@ class ProxyTtsService : TextToSpeechService() {
     private val engineChoiceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == Prefs.KEY_DOWNSTREAM) {
             runCatching { Prefs.downstreamEngine(this)?.let { downstream.select(it) } }
-                .onFailure { Tlog.e(TAG, "切换发声引擎失败", it) }
-        }
-        if (key == Prefs.KEY_KEEP_ALIVE) {
-            if (Prefs.keepAliveWanted(this)) ensureForeground("设置里改了") else leaveForeground()
+                .onFailure { Log.e(TAG, "切换发声引擎失败", it) }
         }
         if (key == Prefs.KEY_SELF_SESSION) {
             if (Prefs.selfSession(this)) openSelfSession() else closeSelfSession()
@@ -198,8 +147,13 @@ class ProxyTtsService : TextToSpeechService() {
     }
 
     /**
-     * 复刻旧版的那条「到自己的连接」，见 [Prefs.selfSession]。一直持有，不 shutdown。
-     * 旧版是 shutdown 了但没断成；这里干脆明着留住，效果一样、更好解释。
+     * 到本引擎自己的一条 TextToSpeech 连接，服务活着就一直持有。见 [Prefs.selfSession]。
+     *
+     * 真机（华为）上查实：开机后一两分钟，系统会把本进程整个冻结几秒——正在读的一句读到
+     * 两秒左右就没声，直到读屏发来下一个调用才解冻。前台服务能挡住，但要挂常驻通知；
+     * 每五秒心跳挡不住。而 9 月 11 日之前的版本从没被冻过，反编译对比后发现唯一持久的差别
+     * 就是它启动时无意留下了这样一条到自己的会话。把它明着建回来，冻结就消失了（0.1.8 验证）。
+     * **别当冗余代码删掉。**
      */
     @Volatile private var selfSession: TextToSpeech? = null
 
@@ -211,120 +165,30 @@ class ProxyTtsService : TextToSpeechService() {
                 val engine = runCatching {
                     TextToSpeech::class.java.getMethod("getCurrentEngine").invoke(selfSession) as? String
                 }.getOrNull()
-                Tlog.i(
+                Log.i(
                     TAG,
                     "到自己的连接 onInit status=" + status + " 连上的引擎=" + engine +
                         " 用时=" + (SystemClock.elapsedRealtime() - started) + "ms",
                 )
             })
-            Tlog.i(TAG, "已发起到自己的连接（旧版行为）")
-        }.onFailure { Tlog.w(TAG, "建到自己的连接失败", it) }
+            Log.i(TAG, "已发起到自己的连接（旧版行为）")
+        }.onFailure { Log.w(TAG, "建到自己的连接失败", it) }
     }
 
     private fun closeSelfSession() {
         val s = selfSession ?: return
         selfSession = null
         runCatching { s.shutdown() }
-        Tlog.i(TAG, "已断开到自己的连接")
-    }
-
-    /**
-     * 是否已经是前台服务。
-     *
-     * 真机（华为）日志：开机后第 118 秒，正在读的一句读到 2.2 秒时整个进程被系统冻结，
-     * 看门狗线程和合成线程在 5.3 秒后同一毫秒一起醒来，音轨报「因 underrun 被禁用，重启」。
-     * 用户听到的就是「读着读着没声」。打开一次本应用系统就不再冻它，所以之前怎么都复现不稳。
-     * 前台服务是所有厂商都认的「别冻我」信号；这里的通知是低优先级、无声的。
-     */
-    @Volatile private var foreground = false
-
-    private fun ensureForeground(why: String) {
-        if (foreground) return
-        try {
-            val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-            nm.createNotificationChannel(
-                // 最低等级：状态栏不显示图标，折叠进「静默通知」区
-                NotificationChannel(KEEP_ALIVE_CHANNEL, getString(R.string.keep_alive_channel), NotificationManager.IMPORTANCE_MIN).apply {
-                    setShowBadge(false)
-                    setSound(null, null)
-                    enableVibration(false)
-                },
-            )
-            val open = PendingIntent.getActivity(
-                this, 0, Intent(this, SettingsActivity::class.java),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            )
-            val notification: Notification = NotificationCompat.Builder(this, KEEP_ALIVE_CHANNEL)
-                .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-                .setContentTitle(getString(R.string.keep_alive_title))
-                .setContentText(getString(R.string.keep_alive_text))
-                .setStyle(NotificationCompat.BigTextStyle().bigText(getString(R.string.keep_alive_text)))
-                .setContentIntent(open)
-                .setOngoing(true)
-                .setSilent(true)
-                .setPriority(NotificationCompat.PRIORITY_MIN)
-                .setVisibility(NotificationCompat.VISIBILITY_SECRET)
-                .setCategory(NotificationCompat.CATEGORY_SERVICE)
-                .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-                .build()
-            ServiceCompat.startForeground(
-                this, KEEP_ALIVE_NOTIFICATION_ID, notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
-            )
-            foreground = true
-            Tlog.i(TAG, "已升为前台服务（" + why + "）")
-        } catch (t: Throwable) {
-            // Android 12 起后台不能随便起前台服务；被拒就等下一次机会（下一句、或用户打开设置界面）
-            Tlog.w(TAG, "升为前台服务失败（" + why + "）: " + t)
-        }
-    }
-
-    private fun leaveForeground() {
-        if (!foreground) return
-        runCatching { ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE) }
-        foreground = false
-        Tlog.i(TAG, "已退出前台服务")
-    }
-
-    /**
-     * 设置界面在前台时会用 startForegroundService 拉一次，这里必须尽快 startForeground，
-     * 否则系统会以「起了前台服务却不亮通知」为由杀掉进程。
-     */
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (Prefs.keepAliveWanted(this)) ensureForeground("界面拉起") else leaveForeground()
-        return START_NOT_STICKY
-    }
-
-    /**
-     * 「开机后十分钟内」这一档：保护期一到就退出前台服务，通知自动消失。
-     * 真机上四次冻结都发生在开机后 109 到 118 秒之间，十分钟余量很足。
-     */
-    private fun scheduleBootWindowEnd() {
-        val left = Prefs.KEEP_ALIVE_BOOT_WINDOW_MS - SystemClock.elapsedRealtime()
-        if (left <= 0) return
-        Thread({
-            try {
-                Thread.sleep(left + 1_000)
-            } catch (e: InterruptedException) {
-                return@Thread
-            }
-            if (!Prefs.keepAliveWanted(this)) {
-                Tlog.i(TAG, "开机保护期结束")
-                leaveForeground()
-            }
-        }, "tts-proxy-boot-window").apply { isDaemon = true }.start()
+        Log.i(TAG, "已断开到自己的连接")
     }
 
     override fun onCreate() {
         super.onCreate()
-        Tlog.i(TAG, "服务 onCreate，配置的下游=" + runCatching { Prefs.downstreamEngine(this) }.getOrNull())
-        runCatching { startFeedWatchdog() }.onFailure { Tlog.w(TAG, "回灌看门狗启动失败", it) }
-        if (Prefs.keepAliveWanted(this)) ensureForeground("服务启动")
-        // 旧版在这个时机建探针。放在主线程发起即可，连接是异步的
+        Log.i(TAG, "服务 onCreate，配置的下游=" + runCatching { Prefs.downstreamEngine(this) }.getOrNull())
+        // 在主线程发起即可，连接是异步的
         openSelfSession()
-        runCatching { scheduleBootWindowEnd() }.onFailure { Tlog.w(TAG, "开机保护期计时失败", it) }
         runCatching { Prefs.of(this).registerOnSharedPreferenceChangeListener(engineChoiceListener) }
-            .onFailure { Tlog.e(TAG, "监听发声引擎设置失败", it) }
+            .onFailure { Log.e(TAG, "监听发声引擎设置失败", it) }
         Thread {
             // 后台线程里漏出去的异常会直接杀掉整个进程（连带界面一起闪退），
             // 所以整段都要兜住
@@ -335,18 +199,16 @@ class ProxyTtsService : TextToSpeechService() {
                 DiacriticFold.split(0x00E9)
                 // 先算好兜底引擎，免得合成线程上临时去枚举
                 fallbackEngine = DownstreamEngine.availableEngines(this).firstOrNull()?.name
-            }.onFailure { Tlog.e(TAG, "预热失败", it) }
+            }.onFailure { Log.e(TAG, "预热失败", it) }
         }.apply { isDaemon = true }.start()
         // 提前把下游连上，省掉第一句的冷启动。开机时我们可能在解锁之前就被 TalkBack 绑定了，
         // 而绝大多数 TTS 引擎不是 directBootAware，那时根本连不上——EngineSwitch 会先找个
         // 能出声的顶着，并在后台一直盯着，用户解锁后几秒内换回他选的引擎。
         runCatching { Prefs.downstreamEngine(this)?.let { downstream.select(it) } }
-            .onFailure { Tlog.e(TAG, "预连下游引擎失败", it) }
+            .onFailure { Log.e(TAG, "预连下游引擎失败", it) }
     }
 
     override fun onDestroy() {
-        Tlog.w(TAG, "服务 onDestroy")
-        leaveForeground()
         closeSelfSession()
         runCatching { Prefs.of(this).unregisterOnSharedPreferenceChangeListener(engineChoiceListener) }
         // 用 isInitialized 判断，避免为了关闭反而把 lazy 触发出来
@@ -363,7 +225,7 @@ class ProxyTtsService : TextToSpeechService() {
         isLanguageAvailable(lang, country, variant)
     } catch (t: Throwable) {
         // 这些是系统回调，异常漏出去就是进程崩溃
-        Tlog.e(TAG, "onIsLanguageAvailable 异常", t)
+        Log.e(TAG, "onIsLanguageAvailable 异常", t)
         TextToSpeech.LANG_NOT_SUPPORTED
     }
 
@@ -392,7 +254,7 @@ class ProxyTtsService : TextToSpeechService() {
     override fun onGetLanguage(): Array<String> = try {
         currentLanguage()
     } catch (t: Throwable) {
-        Tlog.e(TAG, "onGetLanguage 异常", t)
+        Log.e(TAG, "onGetLanguage 异常", t)
         arrayOf("zho", "CHN", "")
     }
 
@@ -427,7 +289,7 @@ class ProxyTtsService : TextToSpeechService() {
     override fun onGetVoices(): MutableList<Voice> = try {
         mirroredVoices()
     } catch (t: Throwable) {
-        Tlog.e(TAG, "onGetVoices 异常", t)
+        Log.e(TAG, "onGetVoices 异常", t)
         ArrayList()
     }
 
@@ -478,7 +340,7 @@ class ProxyTtsService : TextToSpeechService() {
     ): String? = try {
         defaultVoiceNameFor(lang)
     } catch (t: Throwable) {
-        Tlog.e(TAG, "onGetDefaultVoiceNameFor 异常", t)
+        Log.e(TAG, "onGetDefaultVoiceNameFor 异常", t)
         null
     }
 
@@ -510,7 +372,7 @@ class ProxyTtsService : TextToSpeechService() {
             synthesize(request, callback)
         } catch (t: Throwable) {
             // 绝不能把异常抛回合成线程：那会让引擎对所有客户端失声
-            Tlog.e(TAG, "合成异常", t)
+            Log.e(TAG, "合成异常", t)
             runCatching { callback.error(TextToSpeech.ERROR_SYNTHESIS) }
         } finally {
             // 契约：无论成败都必须调 done()
@@ -526,7 +388,7 @@ class ProxyTtsService : TextToSpeechService() {
         // 必须短路，不然会把一堆空请求转发给下游。
         if (raw.isBlank()) {
             // QUEUE_DESTROY 会把所有客户端正在读的一句全停掉，所以空请求本身就是线索，记一行
-            Tlog.i(TAG, "空请求（多半是打断） 来源=" + caller)
+            Log.i(TAG, "空请求（多半是打断） 来源=" + caller)
             emitSilence(callback)
             return
         }
@@ -538,18 +400,12 @@ class ProxyTtsService : TextToSpeechService() {
         // onStop 得能找到它、把它叫醒，否则后面每一句都要跟着干等。
         val session = Session(Diagnostics.utterances.incrementAndGet(), raw.length, caller)
         activeSession.set(session)
-        // 服务启动时升前台可能被系统拒绝，每一句开始都再试一次；已经是前台时这里立刻返回
-        if (!foreground && Prefs.keepAliveWanted(this)) ensureForeground("第 " + session.seq + " 句")
-        Tlog.i(
-            TAG,
-            "第 " + session.seq + " 句开始 字数=" + raw.length + " 来源=" + caller +
-                (if (Prefs.logText(this)) " 文本=" + raw.take(LOG_TEXT_CHARS).replace('\n', ' ') else ""),
-        )
+
         try {
             // 第 2、3 层防护：运行时硬校验 + 环路探针。
             // 永远不信配置里的值——它可能来自备份恢复、旧版本导入，或者 adb 直接改的。
             if (target == null || target == packageName) {
-                Tlog.e(TAG, "下游引擎无效: target=" + target)
+                Log.e(TAG, "下游引擎无效: target=" + target)
                 if (target != null) Prefs.clearDownstream(this)
                 session.end(Diagnostics.EndReason.NO_ENGINE, "目标无效")
                 callback.error(TextToSpeech.ERROR_INVALID_REQUEST)
@@ -558,7 +414,7 @@ class ProxyTtsService : TextToSpeechService() {
             // 环路只让这一句失败，**不清配置**：trace 是调用方自己填的参数，
             // 任何应用都能伪造它，不能凭它改用户的设置。
             if (trace?.split(';')?.contains(packageName) == true) {
-                Tlog.e(TAG, "请求形成环路: trace=" + trace)
+                Log.e(TAG, "请求形成环路: trace=" + trace)
                 session.end(Diagnostics.EndReason.LOOP)
                 callback.error(TextToSpeech.ERROR_INVALID_REQUEST)
                 return
@@ -574,7 +430,7 @@ class ProxyTtsService : TextToSpeechService() {
             // 每一句怎么结束的都记下来，念出来就是故障报告；日志里也留一行，连电脑时能对上号
             val record = session.toRecord()
             Diagnostics.record(record)
-            Tlog.i(
+            Log.i(
                 TAG,
                 "第 " + record.seq + " 句结束: " + record.reason.label +
                     (record.detail?.let { "(" + it + ")" } ?: "") +
@@ -601,7 +457,7 @@ class ProxyTtsService : TextToSpeechService() {
                 return
             }
             Diagnostics.actualEngine = downstream.connectedEngine
-            Tlog.e(TAG, "下游引擎不可用: " + target + "，实际连上 " + Diagnostics.actualEngine)
+            Log.e(TAG, "下游引擎不可用: " + target + "，实际连上 " + Diagnostics.actualEngine)
             session.end(Diagnostics.EndReason.NO_ENGINE)
             callback.error(TextToSpeech.ERROR_SERVICE)
             return
@@ -614,7 +470,7 @@ class ProxyTtsService : TextToSpeechService() {
             // 只有合成线程会换引擎，所以这里看到的变化就是换引擎的全部
             Diagnostics.engineSwitches.incrementAndGet()
             Diagnostics.event("第 " + session.seq + " 句前把引擎从 " + before + " 换成 " + session.engine)
-            Tlog.i(TAG, "换引擎: " + before + " -> " + session.engine)
+            Log.i(TAG, "换引擎: " + before + " -> " + session.engine)
         }
         // 正在用顶替引擎时别把目标记成「上次可用」——它此刻恰恰不可用
         if (!downstream.usingFallback) Prefs.rememberGoodEngine(this, target)
@@ -782,7 +638,7 @@ class ProxyTtsService : TextToSpeechService() {
             // 播放背压而阻塞，那期间不轮询，所以长文本不会被误杀。
             val event = pipe.poll(STALL_TIMEOUT_MS)
             if (event == null) {
-                Tlog.e(TAG, "下游 " + STALL_TIMEOUT_MS + "ms 无任何输出，判定卡死")
+                Log.e(TAG, "下游 " + STALL_TIMEOUT_MS + "ms 无任何输出，判定卡死")
                 Diagnostics.watchdogTimeouts.incrementAndGet()
                 return DrainResult.STALLED
             }
@@ -804,7 +660,7 @@ class ProxyTtsService : TextToSpeechService() {
                         // 同一引擎同一声音下几乎不可能发生。真发生了只能二选一：
                         // 用错误的采样率喂进去（听感是变调，完全听不懂），或者丢掉这一块。
                         // 选丢弃，并且大声打日志——这类杂音极难查。
-                        Tlog.e(TAG, "采样率漂移 " + event + " vs " + state.format + "，丢弃该块")
+                        Log.e(TAG, "采样率漂移 " + event + " vs " + state.format + "，丢弃该块")
                         Diagnostics.formatDrifts.incrementAndGet()
                         session.end(Diagnostics.EndReason.FORMAT_DRIFT, event.toString() + " 对 " + state.format)
                         return DrainResult.DONE
@@ -813,7 +669,7 @@ class ProxyTtsService : TextToSpeechService() {
 
                 is PcmPipe.Event.Chunk -> {
                     if (!state.started) {
-                        Tlog.w(TAG, "下游未上报音频格式，按 16kHz/16 位/单声道兜底")
+                        Log.w(TAG, "下游未上报音频格式，按 16kHz/16 位/单声道兜底")
                         Diagnostics.missingFormats.incrementAndGet()
                         if (callback.start(DEFAULT_SAMPLE_RATE, AudioFormat.ENCODING_PCM_16BIT, 1)
                             != TextToSpeech.SUCCESS
@@ -839,7 +695,7 @@ class ProxyTtsService : TextToSpeechService() {
 
                 PcmPipe.Event.Done -> return DrainResult.DONE
                 is PcmPipe.Event.Failed -> {
-                    Tlog.e(TAG, "下游合成失败 code=" + event.code)
+                    Log.e(TAG, "下游合成失败 code=" + event.code)
                     Diagnostics.downstreamErrors.incrementAndGet()
                     session.end(Diagnostics.EndReason.DOWNSTREAM_ERROR, "错误码 " + event.code)
                     return DrainResult.FAILED
@@ -866,7 +722,6 @@ class ProxyTtsService : TextToSpeechService() {
      * 所以切分长度对齐到帧，不足一帧的尾巴留到下一次拼上。
      */
     private fun feed(callback: SynthesisCallback, bytes: ByteArray, state: StreamState): Boolean {
-        feedSeq = activeSession.get()?.seq ?: feedSeq
         // 别硬编码 8192：超过 maxBufferSize 会抛 IllegalArgumentException，不是返回错误码。
         // 再对齐到帧的整数倍，否则同样会切在帧中间。
         val maxBuffer = state.framer.alignBufferSize(callback.maxBufferSize)
@@ -877,15 +732,7 @@ class ProxyTtsService : TextToSpeechService() {
             val length = minOf(maxBuffer, data.size - offset)
             // 上游未播完的音频超过 500ms 时这里会阻塞；被 stop 时立刻返回错误。
             // 必须检查返回值，否则打断之后还会继续灌。
-            val began = SystemClock.elapsedRealtime()
-            feedStartedAt = began
-            val rc = callback.audioAvailable(data, offset, length)
-            feedStartedAt = 0L
-            val took = SystemClock.elapsedRealtime() - began
-            if (took >= FEED_STALL_MS) {
-                Tlog.w(TAG, "回灌恢复，这一次 audioAvailable 卡了 " + took + "ms，返回 " + rc)
-            }
-            if (rc != TextToSpeech.SUCCESS) return false
+            if (callback.audioAvailable(data, offset, length) != TextToSpeech.SUCCESS) return false
             offset += length
         }
         return true
@@ -972,7 +819,7 @@ class ProxyTtsService : TextToSpeechService() {
                     if (event == null) {
                         waited += POLL_SLICE_MS
                         if (waited >= budget) {
-                            Tlog.e(TAG, "直通模式等待下游超时 " + budget + "ms")
+                            Log.e(TAG, "直通模式等待下游超时 " + budget + "ms")
                             Diagnostics.watchdogTimeouts.incrementAndGet()
                             session.end(Diagnostics.EndReason.STALLED)
                             downstream.stopNow()
@@ -983,7 +830,7 @@ class ProxyTtsService : TextToSpeechService() {
                     when (event) {
                         PcmPipe.Event.Done -> break
                         is PcmPipe.Event.Failed -> {
-                            Tlog.e(TAG, "直通模式下游报错 code=" + event.code)
+                            Log.e(TAG, "直通模式下游报错 code=" + event.code)
                             Diagnostics.downstreamErrors.incrementAndGet()
                             session.end(Diagnostics.EndReason.DOWNSTREAM_ERROR, "错误码 " + event.code)
                             return
@@ -1013,13 +860,13 @@ class ProxyTtsService : TextToSpeechService() {
             val session = activeSession.getAndSet(null)
             if (session != null) {
                 session.interrupt()
-                Tlog.i(TAG, "onStop: 打断第 " + session.seq + " 句，第 " + session.chunk + "/" + session.chunks + " 块")
+                Log.i(TAG, "onStop: 打断第 " + session.seq + " 句，第 " + session.chunk + "/" + session.chunks + " 块")
             } else {
                 // 框架的 stop 是按「当时正在读的那一句」发的，可它送到这里时那一句可能刚好读完了。
                 // 这时下面的 stopNow 落到的是下游队列里的下一块——记下来，真机上出现过就有据可查。
                 Diagnostics.lateStops.incrementAndGet()
                 Diagnostics.event("onStop 到达时没有正在读的句子（迟到的打断）")
-                Tlog.w(TAG, "onStop: 没有正在读的句子，这次 stop 迟到了")
+                Log.w(TAG, "onStop: 没有正在读的句子，这次 stop 迟到了")
             }
         }
         if (lazyDownstream.isInitialized()) runCatching { downstream.stopNow() }
@@ -1063,12 +910,7 @@ class ProxyTtsService : TextToSpeechService() {
         const val KEY_PROXY_TRACE = "com.ttsproxy.TRACE"
 
         private const val DEFAULT_SAMPLE_RATE = 16000
-        private const val KEEP_ALIVE_CHANNEL = "keep_alive"
 
-        private const val KEEP_ALIVE_NOTIFICATION_ID = 1
-
-        /** 开了「日志里记录朗读文本」时每句最多记多少字。 */
-        private const val LOG_TEXT_CHARS = 60
 
         /**
          * 手里一个能出声的引擎都没有时，这一句最多等下游连上多久。
@@ -1077,11 +919,6 @@ class ProxyTtsService : TextToSpeechService() {
         private const val INIT_TIMEOUT_MS = 8_000L
         private const val STALL_TIMEOUT_MS = 15_000L
         private const val POLL_SLICE_MS = 1_000L
-
-        /** 单次 audioAvailable 超过这么久就算卡住。正常最多阻塞约 500ms（上游缓冲的长度）。 */
-        private const val FEED_STALL_MS = 1_500L
-        private const val FEED_WATCH_SLICE_MS = 250L
-        private const val FEED_REPORT_EVERY_MS = 2_000L
         private const val PASSTHROUGH_BASE_TIMEOUT_MS = 30_000L
         private const val PASSTHROUGH_MS_PER_CHAR = 400L
 

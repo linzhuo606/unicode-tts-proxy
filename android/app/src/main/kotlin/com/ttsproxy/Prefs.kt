@@ -28,8 +28,6 @@ object Prefs {
     const val KEY_DETAIL_SINGLE = "detail_single_emoji"
     const val KEY_LAST_GOOD = "last_good_engine"
     const val KEY_IPA_BRAILLE = "ipa_braille"
-    const val KEY_LOG_TEXT = "log_text"
-    const val KEY_KEEP_ALIVE = "keep_alive_mode"
     const val KEY_SELF_SESSION = "self_session"
 
     fun storageContext(context: Context): Context =
@@ -71,41 +69,13 @@ object Prefs {
         of(context).getBoolean(KEY_DETAIL_SINGLE, true)
 
     /**
-     * 排查开关：运行日志里记下每句朗读的前几十个字。默认关——引擎听得到锁屏时输入的每一个字，
-     * 日志默认不能带文本。用户排查「读着读着停了」这类问题时手动打开，用完关掉。
-     */
-    fun logText(context: Context): Boolean =
-        of(context).getBoolean(KEY_LOG_TEXT, false)
-
-    /**
-     * 以前台服务运行、挂一条无声通知，防止系统把进程冻住。三档：
-     * `boot` 只在开机后 [KEEP_ALIVE_BOOT_WINDOW_MS] 内（默认；真机上冻结都发生在开机后一两分钟），
-     * `always` 一直，`off` 关。
+     * 服务活着就保留一条到本引擎自己的 TextToSpeech 连接，默认开。
      *
-     * 每五秒查一次包管理器的心跳试过了，照样被冻。前台服务是所有厂商都认的「别冻我」信号。
-     */
-    fun keepAliveMode(context: Context): String =
-        of(context).getString(KEY_KEEP_ALIVE, KEEP_ALIVE_OFF) ?: KEEP_ALIVE_OFF
-
-    /**
-     * 复刻排查前版本的一个副作用：服务启动时建一个到系统默认引擎（就是本引擎）的 TextToSpeech，
-     * 那版建完立刻 shutdown，但那时会话还没建立，shutdown 什么也没断掉，系统那头的会话就永远留着。
-     * 那个版本重启后从没被冻结过，新版没有这条连接就被冻。先复刻回来验证是不是它在起作用。
+     * 这是防止系统冻结进程的办法（华为真机查实，见 ProxyTtsService.openSelfSession 的注释）。
+     * 9 月 11 日之前的版本靠一个无意留下的探针会话躲过了冻结，改成查包管理器之后就中招了。
      */
     fun selfSession(context: Context): Boolean =
         of(context).getBoolean(KEY_SELF_SESSION, true)
-
-    /** 此刻要不要处在前台服务状态。 */
-    fun keepAliveWanted(context: Context): Boolean = when (keepAliveMode(context)) {
-        KEEP_ALIVE_ALWAYS -> true
-        KEEP_ALIVE_BOOT -> android.os.SystemClock.elapsedRealtime() < KEEP_ALIVE_BOOT_WINDOW_MS
-        else -> false
-    }
-
-    const val KEEP_ALIVE_BOOT = "boot"
-    const val KEEP_ALIVE_ALWAYS = "always"
-    const val KEEP_ALIVE_OFF = "off"
-    const val KEEP_ALIVE_BOOT_WINDOW_MS = 10 * 60_000L
 
     /** 兼容模式：走「直通」链路而不是「流式截获」，给个别 onAudioAvailable 有 bug 的引擎兜底。 */
     fun compatMode(context: Context): Boolean =

@@ -13,6 +13,7 @@ import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
+import android.util.Log
 import com.ttsproxy.core.EngineSwitch
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
@@ -61,7 +62,7 @@ class DownstreamEngine(base: Context) {
             audioFormat: Int,
             channelCount: Int,
         ) {
-            Tlog.i(TAG, "下游开始合成 " + utteranceId + " " + sampleRateInHz + "Hz enc=" + audioFormat + " ch=" + channelCount)
+            Log.i(TAG, "下游开始合成 " + utteranceId + " " + sampleRateInHz + "Hz enc=" + audioFormat + " ch=" + channelCount)
             pipes[utteranceId]?.offerFormat(sampleRateInHz, audioFormat, channelCount)
         }
 
@@ -71,7 +72,7 @@ class DownstreamEngine(base: Context) {
         }
 
         override fun onDone(utteranceId: String?) {
-            Tlog.i(TAG, "下游完成 " + utteranceId + (if (pipes.containsKey(utteranceId)) "" else "（管道已不在）"))
+            Log.i(TAG, "下游完成 " + utteranceId + (if (pipes.containsKey(utteranceId)) "" else "（管道已不在）"))
             pipes[utteranceId]?.offerDone()
         }
 
@@ -82,7 +83,7 @@ class DownstreamEngine(base: Context) {
         }
 
         override fun onError(utteranceId: String?, errorCode: Int) {
-            Tlog.w(TAG, "下游报错 " + utteranceId + " code=" + errorCode)
+            Log.w(TAG, "下游报错 " + utteranceId + " code=" + errorCode)
             pipes[utteranceId]?.offerFailed(errorCode)
         }
 
@@ -93,12 +94,12 @@ class DownstreamEngine(base: Context) {
             val pipe = pipes[utteranceId] ?: return
             Diagnostics.downstreamStops.incrementAndGet()
             Diagnostics.event("下游自己停了 " + utteranceId + "（" + (if (interrupted) "已开始" else "未开始") + "）")
-            Tlog.w(TAG, "下游主动打断 " + utteranceId + " interrupted=" + interrupted)
+            Log.w(TAG, "下游主动打断 " + utteranceId + " interrupted=" + interrupted)
             pipe.interrupt()
         }
     }
 
-    private val switch = EngineSwitch(Opener(), context.packageName) { Tlog.i(TAG, "切换: " + it) }
+    private val switch = EngineSwitch(Opener(), context.packageName) { Log.i(TAG, "切换: " + it) }
 
     init {
         // 上次进程被杀时没来得及删的临时文件
@@ -107,7 +108,7 @@ class DownstreamEngine(base: Context) {
 
     /** 用户选了 [pkg]：立刻在后台开始连，不等下一句。 */
     fun select(pkg: String) {
-        runCatching { switch.select(pkg) }.onFailure { Tlog.e(TAG, "切换发声引擎失败", it) }
+        runCatching { switch.select(pkg) }.onFailure { Log.e(TAG, "切换发声引擎失败", it) }
     }
 
     /**
@@ -120,13 +121,13 @@ class DownstreamEngine(base: Context) {
     fun ensureReady(pkg: String, timeoutMs: Long, cancelled: () -> Boolean = { false }): Boolean = try {
         if (pkg == context.packageName) {
             // 自引用是硬死锁，不是报错那么简单
-            Tlog.e(TAG, "拒绝把自己当作下游引擎")
+            Log.e(TAG, "拒绝把自己当作下游引擎")
             false
         } else {
             switch.acquire(pkg, timeoutMs, cancelled) != null
         }
     } catch (t: Throwable) {
-        Tlog.e(TAG, "下游引擎准备失败", t)
+        Log.e(TAG, "下游引擎准备失败", t)
         false
     }
 
@@ -139,8 +140,8 @@ class DownstreamEngine(base: Context) {
         val link = switch.current ?: return
         Diagnostics.reconnects.incrementAndGet()
         Diagnostics.event("丢弃到 " + link.pkg + " 的连接，重连")
-        Tlog.w(TAG, "下游连接失效，重连: " + link.pkg)
-        runCatching { switch.reportBroken(link) }.onFailure { Tlog.e(TAG, "丢弃失效连接失败", it) }
+        Log.w(TAG, "下游连接失效，重连: " + link.pkg)
+        runCatching { switch.reportBroken(link) }.onFailure { Log.e(TAG, "丢弃失效连接失败", it) }
     }
 
     /** 此刻正在用的引擎不是用户选的那个。诊断界面要显示这个状态。 */
@@ -188,7 +189,7 @@ class DownstreamEngine(base: Context) {
                     }
                 } catch (t: Throwable) {
                     // 跑在主线程上，抛出去就是崩溃
-                    Tlog.e(TAG, "构造下游引擎失败: " + pkg, t)
+                    Log.e(TAG, "构造下游引擎失败: " + pkg, t)
                     initDone.countDown()
                     null
                 }
@@ -197,13 +198,13 @@ class DownstreamEngine(base: Context) {
 
         private fun onInit(status: Int) {
             if (initDone.count > 0) {
-                Tlog.i(TAG, "下游 " + pkg + " onInit status=" + status)
+                Log.i(TAG, "下游 " + pkg + " onInit status=" + status)
                 initStatus = status
                 initDone.countDown()
                 return
             }
             // 下游进程被杀之后框架会自己重连，每重连一次这里就再被调一次
-            Tlog.w(TAG, "下游 " + pkg + " 再次 onInit status=" + status)
+            Log.w(TAG, "下游 " + pkg + " 再次 onInit status=" + status)
             healthy = status == TextToSpeech.SUCCESS && tts != null
             if (healthy) inBackground { refreshVoices(this) }
         }
@@ -218,7 +219,7 @@ class DownstreamEngine(base: Context) {
                 tts.also { tts = null }
             } ?: return
             // shutdown 要走好几次 IPC。换引擎时这里在合成线程上被调，别让新引擎的第一句等它
-            Tlog.i(TAG, "关闭到 " + pkg + " 的连接")
+            Log.i(TAG, "关闭到 " + pkg + " 的连接")
             inBackground {
                 runCatching { engine.stop() }
                 runCatching { engine.shutdown() }
@@ -241,7 +242,7 @@ class DownstreamEngine(base: Context) {
                     Wait.DONE -> Unit
                     Wait.ABANDONED -> return EngineSwitch.Outcome.Abandoned
                     Wait.TIMEOUT -> {
-                        Tlog.w(TAG, "绑定 " + pkg + " 超时")
+                        Log.w(TAG, "绑定 " + pkg + " 超时")
                         return EngineSwitch.Outcome.Failed
                     }
                 }
@@ -252,19 +253,19 @@ class DownstreamEngine(base: Context) {
                     Wait.DONE -> Unit
                     Wait.ABANDONED -> return EngineSwitch.Outcome.Abandoned
                     Wait.TIMEOUT -> {
-                        Tlog.w(TAG, "下游引擎初始化超时: " + pkg)
+                        Log.w(TAG, "下游引擎初始化超时: " + pkg)
                         return EngineSwitch.Outcome.Failed
                     }
                 }
                 if (!conn.initOk) {
-                    Tlog.e(TAG, "下游引擎初始化失败: " + pkg)
+                    Log.e(TAG, "下游引擎初始化失败: " + pkg)
                     return EngineSwitch.Outcome.Failed
                 }
                 // 第二道保险：框架连不上点名的引擎时会悄悄换一个再报成功，见 README。
                 // 读不到就不做判断——绝不能因为「读不到」把一条本来能用的链路判死
                 val actual = currentEngineOf(conn.tts)
                 if (actual != null && actual != pkg) {
-                    Tlog.e(TAG, "框架把请求的引擎 " + pkg + " 悄悄换成了 " + actual)
+                    Log.e(TAG, "框架把请求的引擎 " + pkg + " 悄悄换成了 " + actual)
                     return EngineSwitch.Outcome.Failed
                 }
                 conn.healthy = true
@@ -308,7 +309,7 @@ class DownstreamEngine(base: Context) {
             val ok = try {
                 context.bindService(Intent(TTS_SERVICE_ACTION).setPackage(pkg), this, Context.BIND_AUTO_CREATE)
             } catch (t: Throwable) {
-                Tlog.w(TAG, "bind 探测抛异常: " + pkg, t)
+                Log.w(TAG, "bind 探测抛异常: " + pkg, t)
                 false
             }
             // bindService 返回 false 时也必须解绑，否则会泄漏一个绑定记录
@@ -367,7 +368,7 @@ class DownstreamEngine(base: Context) {
     private fun refreshVoices(link: Connection) {
         val engine = link.tts ?: return
         link.voices = runCatching { engine.voices?.toList().orEmpty() }
-            .onFailure { Tlog.w(TAG, "读取下游声音列表失败", it) }
+            .onFailure { Log.w(TAG, "读取下游声音列表失败", it) }
             .getOrDefault(emptyList())
     }
 
@@ -386,7 +387,7 @@ class DownstreamEngine(base: Context) {
                     ?: engine.voices?.firstOrNull { it.name == voiceName }
                 if (voice != null) engine.voice = voice
             }
-        }.onFailure { Tlog.w(TAG, "设置语速/音调失败", it) }
+        }.onFailure { Log.w(TAG, "设置语速/音调失败", it) }
     }
 
     /**
@@ -403,16 +404,16 @@ class DownstreamEngine(base: Context) {
             // 绝不要传管道 ParcelFileDescriptor：框架写完要 seek 回文件头填 WAV 头，
             // 管道不可 seek，抛出的 IOException 那段既不报错也不回调，会直接挂死。
             val rc = engine.synthesizeToFile(text, extras, sink, id)
-            Tlog.i(TAG, "提交 " + id + " 字数=" + text.length + " rc=" + rc + " 引擎=" + switch.current?.pkg)
+            Log.i(TAG, "提交 " + id + " 字数=" + text.length + " rc=" + rc + " 引擎=" + switch.current?.pkg)
             if (rc != TextToSpeech.SUCCESS) {
-                Tlog.e(TAG, "synthesizeToFile 提交失败 rc=" + rc)
+                Log.e(TAG, "synthesizeToFile 提交失败 rc=" + rc)
                 finish(id)
                 null
             } else {
                 id
             }
         } catch (t: Throwable) {
-            Tlog.e(TAG, "synthesizeToFile 抛异常", t)
+            Log.e(TAG, "synthesizeToFile 抛异常", t)
             finish(id)
             null
         }
@@ -436,7 +437,7 @@ class DownstreamEngine(base: Context) {
 
     /** 打断。必须非阻塞——它从 binder 线程被调用。 */
     fun stopNow() {
-        Tlog.i(TAG, "stopNow: 在途管道 " + pipes.keys.joinToString(",") + " 当前引擎 " + switch.current?.pkg)
+        Log.i(TAG, "stopNow: 在途管道 " + pipes.keys.joinToString(",") + " 当前引擎 " + switch.current?.pkg)
         pipes.values.forEach { runCatching { it.interrupt() } }
         pipes.clear()
         // 正在等下游连上的那一句也要叫醒，它会看到自己已被打断而放手
@@ -506,7 +507,7 @@ class DownstreamEngine(base: Context) {
                 @Suppress("DEPRECATION")
                 pm.queryIntentServices(Intent(TTS_SERVICE_ACTION), PackageManager.MATCH_DEFAULT_ONLY)
             } catch (t: Throwable) {
-                Tlog.e(TAG, "枚举引擎失败（检查 manifest 里的 queries 声明）", t)
+                Log.e(TAG, "枚举引擎失败（检查 manifest 里的 queries 声明）", t)
                 return emptyList()
             }
 

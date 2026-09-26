@@ -1,5 +1,7 @@
 package com.ttsproxy
 
+import android.util.Log
+
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
@@ -77,7 +79,7 @@ class PcmPipe(
             // 宁可丢这一段并记下来，也不能卡住 binder 线程——卡住会让下游那头悄悄丢得更多。
             buffered.addAndGet(-size)
             Diagnostics.audioOverflows.incrementAndGet()
-            Tlog.e(TAG, "音频积压超过上限，丢弃一段（会破坏字节对齐）")
+            Log.e(TAG, "音频积压超过上限，丢弃一段（会破坏字节对齐）")
             return
         }
         queue.put(Event.Chunk(bytes))
