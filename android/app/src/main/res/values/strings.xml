@@ -43,10 +43,11 @@
     <string name="debug_empty">请先输入文本</string>
     <string name="debug_diagnostics_label">运行诊断</string>
     <string name="debug_reset_diagnostics">清零诊断计数</string>
-    <string name="pref_heartbeat_title">每五秒心跳，防止系统冻结</string>
-    <string name="pref_heartbeat_summary">开机后系统会把闲着的后台应用冻结几秒，朗读就会读到一半没声。打开后每五秒和系统打一次交道，让系统当它是活着的。不需要通知。默认开。</string>
-    <string name="pref_keep_alive_title">常驻通知，防止系统冻结</string>
-    <string name="pref_keep_alive_summary">心跳不管用时再打开这个：本应用以前台服务运行，通知栏里会常驻一条无声通知。默认关。</string>
+    <string name="pref_keep_alive_title">防止系统冻结</string>
+    <string name="pref_keep_alive_summary">开机后一两分钟，系统会把闲着的后台应用冻住几秒，朗读就读到一半没声。以前台服务运行能防住，代价是通知栏里有一条无声通知。默认只在开机后十分钟内这样做，之后通知自动消失。</string>
+    <string name="keep_alive_boot">开机后十分钟内</string>
+    <string name="keep_alive_always">一直</string>
+    <string name="keep_alive_off">关</string>
     <string name="keep_alive_channel">后台运行</string>
     <string name="keep_alive_title">Unicode 朗读中转正在工作</string>
     <string name="keep_alive_text">这条通知让朗读不被系统冻住。不想看到它，到设置里关掉「常驻通知」即可。</string>

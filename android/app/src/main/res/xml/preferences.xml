@@ -53,15 +53,11 @@
             app:summary="@string/pref_debug_summary"
             app:title="@string/pref_debug_title" />
 
-        <SwitchPreferenceCompat
-            app:defaultValue="true"
-            app:key="heartbeat"
-            app:summary="@string/pref_heartbeat_summary"
-            app:title="@string/pref_heartbeat_title" />
-
-        <SwitchPreferenceCompat
-            app:defaultValue="false"
-            app:key="keep_alive"
+        <ListPreference
+            app:defaultValue="boot"
+            app:entries="@array/keep_alive_entries"
+            app:entryValues="@array/keep_alive_values"
+            app:key="keep_alive_mode"
             app:summary="@string/pref_keep_alive_summary"
             app:title="@string/pref_keep_alive_title" />
 

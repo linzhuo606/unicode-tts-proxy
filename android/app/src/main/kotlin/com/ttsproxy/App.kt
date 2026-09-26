@@ -52,6 +52,19 @@ class App : Application() {
             }
         }.onFailure { Tlog.w(TAG, "记录启动状态失败", it) }
         runCatching { watchAudioDevices() }.onFailure { Tlog.w(TAG, "监听音频设备失败", it) }
+        runCatching {
+            registerReceiver(
+                object : BroadcastReceiver() {
+                    override fun onReceive(context: Context, intent: Intent) {
+                        Tlog.i(TAG, "屏幕: " + intent.action?.substringAfterLast('.'))
+                    }
+                },
+                IntentFilter().apply {
+                    addAction(Intent.ACTION_SCREEN_ON)
+                    addAction(Intent.ACTION_SCREEN_OFF)
+                },
+            )
+        }.onFailure { Tlog.w(TAG, "监听亮屏灭屏失败", it) }
     }
 
     /**

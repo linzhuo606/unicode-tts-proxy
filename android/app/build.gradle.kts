@@ -15,8 +15,8 @@ android {
         // 本机 SDK 目前只装了 android-34。TTS 引擎用不到 Android 15 的新行为，
         // 要升到 35 只需 sdkmanager "platforms;android-35" 后改这两个数字。
         targetSdk = 34
-        versionCode = 7
-        versionName = "0.1.6"
+        versionCode = 8
+        versionName = "0.1.7"
     }
 
     // 正式版签名。密钥不入库，从环境变量读（CI 里来自 GitHub Secrets）；没配时 release 包不签名。

@@ -29,8 +29,7 @@ object Prefs {
     const val KEY_LAST_GOOD = "last_good_engine"
     const val KEY_IPA_BRAILLE = "ipa_braille"
     const val KEY_LOG_TEXT = "log_text"
-    const val KEY_KEEP_ALIVE = "keep_alive"
-    const val KEY_HEARTBEAT = "heartbeat"
+    const val KEY_KEEP_ALIVE = "keep_alive_mode"
 
     fun storageContext(context: Context): Context =
         context.createDeviceProtectedStorageContext()
@@ -78,18 +77,26 @@ object Prefs {
         of(context).getBoolean(KEY_LOG_TEXT, false)
 
     /**
-     * 以前台服务运行、常驻一条无声通知。默认开：真机（华为）上开机后系统会把本进程冻结几秒，
-     * 读到一半没声；前台服务是所有厂商都认的「别冻我」信号。
+     * 以前台服务运行、挂一条无声通知，防止系统把进程冻住。三档：
+     * `boot` 只在开机后 [KEEP_ALIVE_BOOT_WINDOW_MS] 内（默认；真机上冻结都发生在开机后一两分钟），
+     * `always` 一直，`off` 关。
+     *
+     * 每五秒查一次包管理器的心跳试过了，照样被冻。前台服务是所有厂商都认的「别冻我」信号。
      */
-    fun keepAlive(context: Context): Boolean =
-        of(context).getBoolean(KEY_KEEP_ALIVE, false)
+    fun keepAliveMode(context: Context): String =
+        of(context).getString(KEY_KEEP_ALIVE, KEEP_ALIVE_BOOT) ?: KEEP_ALIVE_BOOT
 
-    /**
-     * 每五秒和系统打一次交道。排查之前的版本每五秒查一次目标引擎，从没被冻结过；
-     * 改成退避重试之后进程一安静就被冻。先按这个假设验证，成立就不用常驻通知。
-     */
-    fun heartbeat(context: Context): Boolean =
-        of(context).getBoolean(KEY_HEARTBEAT, true)
+    /** 此刻要不要处在前台服务状态。 */
+    fun keepAliveWanted(context: Context): Boolean = when (keepAliveMode(context)) {
+        KEEP_ALIVE_ALWAYS -> true
+        KEEP_ALIVE_BOOT -> android.os.SystemClock.elapsedRealtime() < KEEP_ALIVE_BOOT_WINDOW_MS
+        else -> false
+    }
+
+    const val KEEP_ALIVE_BOOT = "boot"
+    const val KEEP_ALIVE_ALWAYS = "always"
+    const val KEEP_ALIVE_OFF = "off"
+    const val KEEP_ALIVE_BOOT_WINDOW_MS = 10 * 60_000L
 
     /** 兼容模式：走「直通」链路而不是「流式截获」，给个别 onAudioAvailable 有 bug 的引擎兜底。 */
     fun compatMode(context: Context): Boolean =

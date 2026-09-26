@@ -20,7 +20,7 @@ class SettingsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         Tlog.i("SettingsActivity", "设置界面打开")
         // 界面在前台时起前台服务一定被允许：服务启动时若被系统拒绝，这里补上
-        if (Prefs.keepAlive(this)) {
+        if (Prefs.keepAliveWanted(this)) {
             runCatching { startForegroundService(Intent(this, ProxyTtsService::class.java)) }
                 .onFailure { Tlog.w("SettingsActivity", "从界面拉前台服务失败", it) }
         }

@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string-array name="keep_alive_entries">
+        <item>@string/keep_alive_boot</item>
+        <item>@string/keep_alive_always</item>
+        <item>@string/keep_alive_off</item>
+    </string-array>
+    <string-array name="keep_alive_values">
+        <item>boot</item>
+        <item>always</item>
+        <item>off</item>
+    </string-array>
+
     <string-array name="verbosity_entries">
         <item>@string/verbosity_off</item>
         <item>@string/verbosity_brief</item>

@@ -190,7 +190,7 @@ class ProxyTtsService : TextToSpeechService() {
                 .onFailure { Tlog.e(TAG, "切换发声引擎失败", it) }
         }
         if (key == Prefs.KEY_KEEP_ALIVE) {
-            if (Prefs.keepAlive(this)) ensureForeground("设置里打开") else leaveForeground()
+            if (Prefs.keepAliveWanted(this)) ensureForeground("设置里改了") else leaveForeground()
         }
     }
 
@@ -209,7 +209,8 @@ class ProxyTtsService : TextToSpeechService() {
         try {
             val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
             nm.createNotificationChannel(
-                NotificationChannel(KEEP_ALIVE_CHANNEL, getString(R.string.keep_alive_channel), NotificationManager.IMPORTANCE_LOW).apply {
+                // 最低等级：状态栏不显示图标，折叠进「静默通知」区
+                NotificationChannel(KEEP_ALIVE_CHANNEL, getString(R.string.keep_alive_channel), NotificationManager.IMPORTANCE_MIN).apply {
                     setShowBadge(false)
                     setSound(null, null)
                     enableVibration(false)
@@ -227,7 +228,8 @@ class ProxyTtsService : TextToSpeechService() {
                 .setContentIntent(open)
                 .setOngoing(true)
                 .setSilent(true)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setPriority(NotificationCompat.PRIORITY_MIN)
+                .setVisibility(NotificationCompat.VISIBILITY_SECRET)
                 .setCategory(NotificationCompat.CATEGORY_SERVICE)
                 .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
                 .build()
@@ -243,36 +245,6 @@ class ProxyTtsService : TextToSpeechService() {
         }
     }
 
-    /**
-     * 心跳：每五秒查一次包管理器，一次很轻的 binder 调用。
-     *
-     * 排查之前的版本每五秒检查一次目标引擎能不能连上，重启后从没被冻结过；
-     * 改成退避重试之后，目标引擎一连上进程就彻底安静，开机后没多久就被系统冻住。
-     * 华为的冻结是给「后台闲着」的应用用的，这条心跳就是让它别把我们当闲着的。
-     * 是不是真的管用，由看门狗的日志来回答。
-     */
-    private fun startHeartbeat() {
-        Thread({
-            var beats = 0L
-            while (true) {
-                try {
-                    Thread.sleep(HEARTBEAT_MS)
-                } catch (e: InterruptedException) {
-                    return@Thread
-                }
-                if (!Prefs.heartbeat(this)) continue
-                runCatching {
-                    val target = Prefs.downstreamEngine(this) ?: packageName
-                    @Suppress("DEPRECATION")
-                    packageManager.queryIntentServices(Intent(TTS_SERVICE_ACTION).setPackage(target), 0)
-                }
-                beats++
-                if (beats % HEARTBEAT_LOG_EVERY == 0L) Tlog.i(TAG, "心跳 " + beats + " 次")
-            }
-        }, "tts-proxy-heartbeat").apply { isDaemon = true }.start()
-        Tlog.i(TAG, "心跳线程已启动，每 " + HEARTBEAT_MS + "ms 一次，开关=" + Prefs.heartbeat(this))
-    }
-
     private fun leaveForeground() {
         if (!foreground) return
         runCatching { ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE) }
@@ -285,16 +257,36 @@ class ProxyTtsService : TextToSpeechService() {
      * 否则系统会以「起了前台服务却不亮通知」为由杀掉进程。
      */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (Prefs.keepAlive(this)) ensureForeground("界面拉起") else leaveForeground()
+        if (Prefs.keepAliveWanted(this)) ensureForeground("界面拉起") else leaveForeground()
         return START_NOT_STICKY
+    }
+
+    /**
+     * 「开机后十分钟内」这一档：保护期一到就退出前台服务，通知自动消失。
+     * 真机上四次冻结都发生在开机后 109 到 118 秒之间，十分钟余量很足。
+     */
+    private fun scheduleBootWindowEnd() {
+        val left = Prefs.KEEP_ALIVE_BOOT_WINDOW_MS - SystemClock.elapsedRealtime()
+        if (left <= 0) return
+        Thread({
+            try {
+                Thread.sleep(left + 1_000)
+            } catch (e: InterruptedException) {
+                return@Thread
+            }
+            if (!Prefs.keepAliveWanted(this)) {
+                Tlog.i(TAG, "开机保护期结束")
+                leaveForeground()
+            }
+        }, "tts-proxy-boot-window").apply { isDaemon = true }.start()
     }
 
     override fun onCreate() {
         super.onCreate()
         Tlog.i(TAG, "服务 onCreate，配置的下游=" + runCatching { Prefs.downstreamEngine(this) }.getOrNull())
         runCatching { startFeedWatchdog() }.onFailure { Tlog.w(TAG, "回灌看门狗启动失败", it) }
-        if (Prefs.keepAlive(this)) ensureForeground("服务启动")
-        runCatching { startHeartbeat() }.onFailure { Tlog.w(TAG, "心跳线程启动失败", it) }
+        if (Prefs.keepAliveWanted(this)) ensureForeground("服务启动")
+        runCatching { scheduleBootWindowEnd() }.onFailure { Tlog.w(TAG, "开机保护期计时失败", it) }
         runCatching { Prefs.of(this).registerOnSharedPreferenceChangeListener(engineChoiceListener) }
             .onFailure { Tlog.e(TAG, "监听发声引擎设置失败", it) }
         Thread {
@@ -510,7 +502,7 @@ class ProxyTtsService : TextToSpeechService() {
         val session = Session(Diagnostics.utterances.incrementAndGet(), raw.length, caller)
         activeSession.set(session)
         // 服务启动时升前台可能被系统拒绝，每一句开始都再试一次；已经是前台时这里立刻返回
-        if (!foreground && Prefs.keepAlive(this)) ensureForeground("第 " + session.seq + " 句")
+        if (!foreground && Prefs.keepAliveWanted(this)) ensureForeground("第 " + session.seq + " 句")
         Tlog.i(
             TAG,
             "第 " + session.seq + " 句开始 字数=" + raw.length + " 来源=" + caller +
@@ -1035,9 +1027,7 @@ class ProxyTtsService : TextToSpeechService() {
 
         private const val DEFAULT_SAMPLE_RATE = 16000
         private const val KEEP_ALIVE_CHANNEL = "keep_alive"
-        private const val HEARTBEAT_MS = 5_000L
-        private const val HEARTBEAT_LOG_EVERY = 60L
-        private const val TTS_SERVICE_ACTION = "android.intent.action.TTS_SERVICE"
+
         private const val KEEP_ALIVE_NOTIFICATION_ID = 1
 
         /** 开了「日志里记录朗读文本」时每句最多记多少字。 */
