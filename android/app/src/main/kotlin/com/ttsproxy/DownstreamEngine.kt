@@ -43,7 +43,15 @@ class DownstreamEngine(base: Context) {
     }
 
     private val pipes = ConcurrentHashMap<String, PcmPipe>()
+
+    /**
+     * 预热句的管道单独放。[stopNow] 每次打断都会把 [pipes] 全部摘掉，
+     * 而预热是在后台连接线程上等的，和用户正在读的句子无关，不能被打断连累。
+     */
+    private val primes = ConcurrentHashMap<String, PcmPipe>()
     private val idGen = AtomicLong()
+
+    private fun pipeFor(utteranceId: String?): PcmPipe? = pipes[utteranceId] ?: primes[utteranceId]
 
     /**
      * 按 utteranceId 把回调路由到对应的管道。
@@ -62,35 +70,35 @@ class DownstreamEngine(base: Context) {
             channelCount: Int,
         ) {
             Tlog.i(TAG, "下游开始合成 " + utteranceId + " " + sampleRateInHz + "Hz enc=" + audioFormat + " ch=" + channelCount)
-            pipes[utteranceId]?.offerFormat(sampleRateInHz, audioFormat, channelCount)
+            pipeFor(utteranceId)?.offerFormat(sampleRateInHz, audioFormat, channelCount)
         }
 
         override fun onAudioAvailable(utteranceId: String?, audio: ByteArray?) {
             if (audio == null || audio.isEmpty()) return
-            pipes[utteranceId]?.offerChunk(audio)
+            pipeFor(utteranceId)?.offerChunk(audio)
         }
 
         override fun onDone(utteranceId: String?) {
-            Tlog.i(TAG, "下游完成 " + utteranceId + (if (pipes.containsKey(utteranceId)) "" else "（管道已不在）"))
-            pipes[utteranceId]?.offerDone()
+            Tlog.i(TAG, "下游完成 " + utteranceId + (if (pipeFor(utteranceId) != null) "" else "（管道已不在）"))
+            pipeFor(utteranceId)?.offerDone()
         }
 
         // 框架要求实现这个已废弃的重载；实际走的是下面带错误码的那个
         @Suppress("OVERRIDE_DEPRECATION")
         override fun onError(utteranceId: String?) {
-            pipes[utteranceId]?.offerFailed(-1)
+            pipeFor(utteranceId)?.offerFailed(-1)
         }
 
         override fun onError(utteranceId: String?, errorCode: Int) {
             Tlog.w(TAG, "下游报错 " + utteranceId + " code=" + errorCode)
-            pipes[utteranceId]?.offerFailed(errorCode)
+            pipeFor(utteranceId)?.offerFailed(errorCode)
         }
 
         override fun onStop(utteranceId: String?, interrupted: Boolean) {
             // stopNow 会先把管道全部摘掉再叫下游停，所以这里还能找到管道，
             // 就说明是下游自己把这一块停了（它的进程被销毁、别的客户端对它 QUEUE_DESTROY 之类），
             // 不是我们叫的。这正是「朗读读着读着没了、又没报错」最难查的一种来源。
-            val pipe = pipes[utteranceId] ?: return
+            val pipe = pipeFor(utteranceId) ?: return
             Diagnostics.downstreamStops.incrementAndGet()
             Diagnostics.event("下游自己停了 " + utteranceId + "（" + (if (interrupted) "已开始" else "未开始") + "）")
             Tlog.w(TAG, "下游主动打断 " + utteranceId + " interrupted=" + interrupted)
@@ -279,11 +287,10 @@ class DownstreamEngine(base: Context) {
 
         override fun standIns(): List<String> = availableEngines(context).map { it.name }
 
+        override fun warmUp(link: Connection): Boolean = warmUpBlocking(link)
+
         override fun onReady(link: Connection, awaited: Boolean) {
-            inBackground {
-                refreshVoices(link)
-                if (!awaited) warmUp(link)
-            }
+            inBackground { refreshVoices(link) }
         }
     }
 
@@ -374,13 +381,53 @@ class DownstreamEngine(base: Context) {
             .getOrDefault(emptyList())
     }
 
-    /** 抄 TalkBack 的做法：连上之后先空跑一次，把下游的模型和线程预热掉。 */
-    private fun warmUp(link: Connection) {
-        val engine = link.tts ?: return
-        runCatching {
-            val sink = File(context.cacheDir, SINK_PREFIX + "-prime.wav")
-            engine.synthesizeToFile("1 2 3", Bundle(), sink, SINK_PREFIX + "-prime")
-        }.onFailure { Tlog.w(TAG, "预热失败（不影响使用）", it) }
+    /**
+     * 连上之后先真正合成一句，把下游的模型和线程预热掉，**等它合成完**才算连好。
+     *
+     * 原来是提交一句「1 2 3」就不管了。真机日志：开机后顶替引擎读得好好的，目标引擎
+     * 一连上就换，第一句提交之后两秒多才开始合成，再三秒多没出一个字——它还在冷启动，
+     * 那句预热甚至排在真正要读的句子前面。现在预热在连接线程上等到底，期间顶替照读；
+     * 预热超时就当这条连接没连成，按退避再试。
+     */
+    private fun warmUpBlocking(link: Connection): Boolean {
+        val engine = link.tts ?: return false
+        val id = SINK_PREFIX + "-prime-" + idGen.incrementAndGet()
+        val pipe = PcmPipe(collectAudio = false)
+        primes[id] = pipe
+        try {
+            val sink = File(context.cacheDir, id + ".wav")
+            val rc = runCatching { engine.synthesizeToFile(WARM_UP_TEXT, Bundle(), sink, id) }
+                .getOrElse { Tlog.w(TAG, "预热提交抛异常: " + link.pkg, it); TextToSpeech.ERROR }
+            if (rc != TextToSpeech.SUCCESS) {
+                Tlog.w(TAG, "预热提交被拒 rc=" + rc + ": " + link.pkg)
+                return false
+            }
+            val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(WARM_UP_TIMEOUT_MS)
+            while (true) {
+                val left = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime())
+                if (left <= 0) {
+                    Tlog.w(TAG, "预热 " + WARM_UP_TIMEOUT_MS + "ms 没合成完: " + link.pkg)
+                    runCatching { engine.stop() }
+                    return false
+                }
+                when (val event = pipe.poll(minOf(left, 500L))) {
+                    null -> continue
+                    PcmPipe.Event.Done -> return true
+                    is PcmPipe.Event.Failed -> {
+                        Tlog.w(TAG, "预热报错 code=" + event.code + ": " + link.pkg)
+                        return false
+                    }
+                    PcmPipe.Event.Interrupted -> {
+                        // 连接在预热途中被关掉了（用户又改了主意）
+                        return false
+                    }
+                    else -> Unit
+                }
+            }
+        } finally {
+            primes.remove(id)
+            runCatching { File(context.cacheDir, id + ".wav").delete() }
+        }
     }
 
     /** 语速/音调透传。不设的话，用户在 TalkBack 里调的语速会完全失效。 */
@@ -487,6 +534,15 @@ class DownstreamEngine(base: Context) {
 
         /** 服务起来之后，等 TextToSpeech 握手完成的上限。 */
         private const val INIT_TIMEOUT_MS = 6_000L
+
+        /**
+         * 预热最多等多久。重量级引擎开机后第一次合成要好几秒（真机上看到过五六秒还没出声），
+         * 这一步在连接线程上、旧引擎照读，所以可以等得很宽裕。
+         */
+        private const val WARM_UP_TIMEOUT_MS = 30_000L
+
+        /** 中英文都带上，把两边的模型都拉起来。合成结果直接丢掉，用户听不到。 */
+        private const val WARM_UP_TEXT = "你好，1 2 3"
 
         private val WAIT_SLICE_NANOS = TimeUnit.MILLISECONDS.toNanos(100)
 

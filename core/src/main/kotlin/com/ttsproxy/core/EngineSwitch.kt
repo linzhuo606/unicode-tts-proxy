@@ -72,8 +72,13 @@ class EngineSwitch<L : EngineSwitch.Link>(
         fun standIns(): List<String>
 
         /**
-         * 新连接好了。[awaited] 为 true 表示有一句正等着它读——这时别预热，
-         * 预热会排在真正要读的那一句前面。
+         * 连好之后、换上之前预热：让它真正合成一遍，把模型和线程都拉起来。**阻塞**，自己负责超时。
+         * 返回 false 表示这个引擎连合成一句都做不到，按连接失败处理。只在没有句子等它时被调用。
+         */
+        fun warmUp(link: L): Boolean = true
+
+        /**
+         * 新连接好了。[awaited] 为 true 表示有一句正等着它读。
          */
         fun onReady(link: L, awaited: Boolean) {}
     }
@@ -306,8 +311,13 @@ class EngineSwitch<L : EngineSwitch.Link>(
                     log("连目标 " + pkg + " 结果：" + outcome.javaClass.simpleName)
                     when (outcome) {
                         is Outcome.Opened -> {
-                            publish(outcome.link, asTarget = true)
-                            return
+                            if (warmIfIdle(outcome.link)) {
+                                publish(outcome.link, asTarget = true)
+                                return
+                            }
+                            // 连上了却连一句都合成不出来：和「起不来」一个待遇，退避重试，期间旧引擎照读
+                            closeQuietly(outcome.link)
+                            fail(pkg, cheap = false)
                         }
                         // 用户中途改了主意：回头按新的目标再来一遍。
                         // 目标其实没变的话按失败算，免得在这里空转
@@ -378,7 +388,12 @@ class EngineSwitch<L : EngineSwitch.Link>(
             if (!stillNeeded()) return
             val outcome = openQuietly(pkg, stillNeeded)
             log("连顶替 " + pkg + " 结果：" + outcome.javaClass.simpleName)
-            if (outcome is Outcome.Opened && publish(outcome.link, asTarget = false)) return
+            if (outcome !is Outcome.Opened) continue
+            if (!warmIfIdle(outcome.link)) {
+                closeQuietly(outcome.link)
+                continue
+            }
+            if (publish(outcome.link, asTarget = false)) return
         }
         lock.withLock {
             if (wanted == target && needsStandIn()) {
@@ -387,6 +402,27 @@ class EngineSwitch<L : EngineSwitch.Link>(
                 changed.signalAll()
             }
         }
+    }
+
+    /**
+     * 连好了、换上之前，没人等的话先预热。
+     *
+     * 真机上撞到过：开机后顶替引擎读得好好的，目标引擎一连上就换，可它是冷的——
+     * 第一句提交之后两秒多才开始合成，再三秒多没出一个字，用户以为坏了划走了。
+     * 预热在连接线程上做，期间旧引擎照读；预热不过就当连接失败，按退避再来。
+     * 有句子正等着它时不预热：那是用户刚在设置里选了它，等的就是它来读这一句。
+     */
+    private fun warmIfIdle(link: L): Boolean {
+        val waiting = lock.withLock { closed || waiters > 0 }
+        if (waiting) return true
+        log("预热 " + link.pkg)
+        val ok = try {
+            connector.warmUp(link)
+        } catch (t: Throwable) {
+            false
+        }
+        log("预热 " + link.pkg + (if (ok) " 完成" else " 失败"))
+        return ok
     }
 
     /** 把连好的连接放进 [ready]，等合成线程下一句换上。不再需要了就直接关掉。 */
