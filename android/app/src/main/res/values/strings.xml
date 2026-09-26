@@ -28,6 +28,9 @@
     <string name="pref_debug_title">检查朗读效果</string>
     <string name="pref_debug_summary">输入任意文本，查看并试听处理后的结果</string>
 
+    <string name="pref_startup_title">检查系统的应用启动管理</string>
+    <string name="pref_startup_summary">华为等系统会把没打开过的后台应用冻住几秒，朗读就读到一半没声。每次卸载重装后这里的设置会被清空，请把本应用改成手动管理，并打开允许自启动、允许关联启动、允许后台活动。点这里直接跳过去。</string>
+    <string name="toast_startup_manager_missing">这台手机没有应用启动管理，已打开本应用的应用信息页</string>
     <string name="pref_help_title">怎样换回原来的引擎</string>
     <string name="pref_help_summary">打开系统设置，进入无障碍，选择文字转语音输出，把首选引擎改回原来的引擎</string>
 

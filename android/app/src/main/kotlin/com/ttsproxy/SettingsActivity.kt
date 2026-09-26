@@ -63,6 +63,11 @@ class SettingsActivity : AppCompatActivity() {
                 startActivity(Intent(requireContext(), DebugActivity::class.java))
                 true
             }
+
+            findPreference<Preference>("open_startup_manager")?.setOnPreferenceClickListener {
+                openStartupManager()
+                true
+            }
         }
 
         /**
@@ -113,6 +118,34 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 }
             }.apply { isDaemon = true }.start()
+        }
+
+        /**
+         * 跳到系统的「应用启动管理」。华为的入口是手机管家里的一个 Activity，不同机型类名不同，
+         * 挨个试；都没有就退到本应用的应用信息页，那里至少能关电池优化。
+         *
+         * 真机上查实过：开机后系统会把本进程冻住几秒，朗读读到一半没声；卸载重装会把这里的
+         * 手动管理设置清空，退回自动管理，问题就复发。
+         */
+        private fun openStartupManager() {
+            val context = requireContext()
+            val candidates = listOf(
+                "com.huawei.systemmanager" to "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
+                "com.huawei.systemmanager" to "com.huawei.systemmanager.appcontrol.activity.StartupAppControlActivity",
+                "com.huawei.systemmanager" to "com.huawei.systemmanager.optimize.bootstart.BootStartActivity",
+            )
+            for ((pkg, cls) in candidates) {
+                val intent = Intent().setClassName(pkg, cls).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (runCatching { context.startActivity(intent); true }.getOrDefault(false)) return
+            }
+            toast(getString(R.string.toast_startup_manager_missing))
+            runCatching {
+                context.startActivity(
+                    Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                        .setData(android.net.Uri.parse("package:" + context.packageName))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }
         }
 
         private fun updateEngineSummary(pref: ListPreference, override: String? = null) {

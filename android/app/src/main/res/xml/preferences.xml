@@ -66,6 +66,11 @@
             app:title="@string/pref_compat_title" />
 
         <Preference
+            app:key="open_startup_manager"
+            app:summary="@string/pref_startup_summary"
+            app:title="@string/pref_startup_title" />
+
+        <Preference
             app:key="help_restore"
             app:selectable="false"
             app:summary="@string/pref_help_summary"
