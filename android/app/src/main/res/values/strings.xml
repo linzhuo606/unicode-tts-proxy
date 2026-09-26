@@ -43,6 +43,13 @@
     <string name="debug_empty">请先输入文本</string>
     <string name="debug_diagnostics_label">运行诊断</string>
     <string name="debug_reset_diagnostics">清零诊断计数</string>
+    <string name="debug_log_label">运行日志。进程一启动就开始记，不需要打开本应用。复制后粘贴发给开发者即可，里面不含朗读的文本。</string>
+    <string name="debug_copy_log">复制日志到剪贴板</string>
+    <string name="debug_share_log">分享日志</string>
+    <string name="debug_clear_log">清空日志</string>
+    <string name="debug_log_copied">已复制日志，共 %1$d 行</string>
+    <string name="debug_log_cleared">日志已清空</string>
+    <string name="debug_log_empty">日志是空的</string>
 
     <string name="toast_engine_ready">中转已就绪，将由 %1$s 发声</string>
     <string name="toast_no_engine">请先选择一个发声引擎</string>

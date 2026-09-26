@@ -1,7 +1,6 @@
 package com.ttsproxy
 
 import android.content.Context
-import android.util.Log
 import com.ttsproxy.core.SymbolDict
 
 /**
@@ -55,7 +54,7 @@ object DictLoader {
         // 音标读盲文点位是整体切换，在这里换掉简洁读法，流水线本身不必知道有这回事
         val base = if (braille) SymbolDict.briefAsBraille(loaded) else loaded
         val user = UserDictStore.load(context)
-        if (user.isNotEmpty()) Log.i(TAG, "用户词典 " + user.size + " 条（版本 " + userVersion + "）")
+        if (user.isNotEmpty()) Tlog.i(TAG, "用户词典 " + user.size + " 条（版本 " + userVersion + "）")
         // 用户层排在前面 —— 同一个键上覆盖内置读法
         return SymbolDict.of(listOf(user, base))
     }
@@ -64,12 +63,12 @@ object DictLoader {
         context.assets.open(ASSET_NAME).use { input ->
             input.bufferedReader(Charsets.UTF_8).useLines { lines ->
                 SymbolDict.parseEntries(lines).also {
-                    Log.i(TAG, "内置词典载入 " + it.size + " 条")
+                    Tlog.i(TAG, "内置词典载入 " + it.size + " 条")
                 }
             }
         }
     } catch (t: Throwable) {
-        Log.e(TAG, "内置词典载入失败，降级为不替换（引擎仍可正常发声）", t)
+        Tlog.e(TAG, "内置词典载入失败，降级为不替换（引擎仍可正常发声）", t)
         emptyList()
     }
 

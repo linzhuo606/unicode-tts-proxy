@@ -4,12 +4,12 @@ import android.content.SharedPreferences
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.os.Bundle
+import android.os.SystemClock
 import android.speech.tts.SynthesisCallback
 import android.speech.tts.SynthesisRequest
 import android.speech.tts.TextToSpeech
 import android.speech.tts.TextToSpeechService
 import android.speech.tts.Voice
-import android.util.Log
 import com.ttsproxy.core.Chunker
 import com.ttsproxy.core.DiacriticFold
 import com.ttsproxy.core.PcmFramer
@@ -69,7 +69,7 @@ class ProxyTtsService : TextToSpeechService() {
         if (hit != null && cachedDictVersion == wanted && cachedIpaBraille == braille) return hit
         val built = runCatching { TextPipeline(DictLoader.load(this)) }
             .getOrElse {
-                Log.e(TAG, "词典载入失败，降级为不替换", it)
+                Tlog.e(TAG, "词典载入失败，降级为不替换", it)
                 TextPipeline.withoutDict()
             }
         cachedPipeline = built
@@ -93,14 +93,39 @@ class ProxyTtsService : TextToSpeechService() {
      */
     @Volatile private var fallbackEngine: String? = null
 
-    private class Session {
+    private class Session(val seq: Int, val chars: Int) {
         @Volatile var pipe: PcmPipe? = null
         @Volatile var stopped = false
+
+        // 以下只在合成线程上写，给诊断记录用
+        val startedAt = SystemClock.elapsedRealtime()
+        var chunk = 0
+        var chunks = 0
+        var engine: String? = null
+        var standIn = false
+        private var reason: Diagnostics.EndReason? = null
+        private var detail: String? = null
 
         fun interrupt() {
             stopped = true
             pipe?.interrupt()
         }
+
+        /** 记下这一句是怎么结束的。只记第一个原因——后面的多半是它的连锁反应。 */
+        fun end(reason: Diagnostics.EndReason, detail: String? = null) {
+            if (this.reason == null) {
+                this.reason = reason
+                this.detail = detail
+            }
+        }
+
+        fun toRecord(): Diagnostics.Record = Diagnostics.Record(
+            seq, chars, chunk, chunks,
+            reason ?: Diagnostics.EndReason.DONE, detail,
+            engine, standIn,
+            SystemClock.elapsedRealtime() - startedAt,
+            SystemClock.elapsedRealtime() / 1000,
+        )
     }
 
     /**
@@ -112,14 +137,15 @@ class ProxyTtsService : TextToSpeechService() {
     private val engineChoiceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == Prefs.KEY_DOWNSTREAM) {
             runCatching { Prefs.downstreamEngine(this)?.let { downstream.select(it) } }
-                .onFailure { Log.e(TAG, "切换发声引擎失败", it) }
+                .onFailure { Tlog.e(TAG, "切换发声引擎失败", it) }
         }
     }
 
     override fun onCreate() {
         super.onCreate()
+        Tlog.i(TAG, "服务 onCreate，配置的下游=" + runCatching { Prefs.downstreamEngine(this) }.getOrNull())
         runCatching { Prefs.of(this).registerOnSharedPreferenceChangeListener(engineChoiceListener) }
-            .onFailure { Log.e(TAG, "监听发声引擎设置失败", it) }
+            .onFailure { Tlog.e(TAG, "监听发声引擎设置失败", it) }
         Thread {
             // 后台线程里漏出去的异常会直接杀掉整个进程（连带界面一起闪退），
             // 所以整段都要兜住
@@ -130,16 +156,17 @@ class ProxyTtsService : TextToSpeechService() {
                 DiacriticFold.split(0x00E9)
                 // 先算好兜底引擎，免得合成线程上临时去枚举
                 fallbackEngine = DownstreamEngine.availableEngines(this).firstOrNull()?.name
-            }.onFailure { Log.e(TAG, "预热失败", it) }
+            }.onFailure { Tlog.e(TAG, "预热失败", it) }
         }.apply { isDaemon = true }.start()
         // 提前把下游连上，省掉第一句的冷启动。开机时我们可能在解锁之前就被 TalkBack 绑定了，
         // 而绝大多数 TTS 引擎不是 directBootAware，那时根本连不上——EngineSwitch 会先找个
         // 能出声的顶着，并在后台一直盯着，用户解锁后几秒内换回他选的引擎。
         runCatching { Prefs.downstreamEngine(this)?.let { downstream.select(it) } }
-            .onFailure { Log.e(TAG, "预连下游引擎失败", it) }
+            .onFailure { Tlog.e(TAG, "预连下游引擎失败", it) }
     }
 
     override fun onDestroy() {
+        Tlog.w(TAG, "服务 onDestroy")
         runCatching { Prefs.of(this).unregisterOnSharedPreferenceChangeListener(engineChoiceListener) }
         // 用 isInitialized 判断，避免为了关闭反而把 lazy 触发出来
         if (lazyDownstream.isInitialized()) runCatching { downstream.shutdown() }
@@ -155,7 +182,7 @@ class ProxyTtsService : TextToSpeechService() {
         isLanguageAvailable(lang, country, variant)
     } catch (t: Throwable) {
         // 这些是系统回调，异常漏出去就是进程崩溃
-        Log.e(TAG, "onIsLanguageAvailable 异常", t)
+        Tlog.e(TAG, "onIsLanguageAvailable 异常", t)
         TextToSpeech.LANG_NOT_SUPPORTED
     }
 
@@ -184,7 +211,7 @@ class ProxyTtsService : TextToSpeechService() {
     override fun onGetLanguage(): Array<String> = try {
         currentLanguage()
     } catch (t: Throwable) {
-        Log.e(TAG, "onGetLanguage 异常", t)
+        Tlog.e(TAG, "onGetLanguage 异常", t)
         arrayOf("zho", "CHN", "")
     }
 
@@ -219,7 +246,7 @@ class ProxyTtsService : TextToSpeechService() {
     override fun onGetVoices(): MutableList<Voice> = try {
         mirroredVoices()
     } catch (t: Throwable) {
-        Log.e(TAG, "onGetVoices 异常", t)
+        Tlog.e(TAG, "onGetVoices 异常", t)
         ArrayList()
     }
 
@@ -270,7 +297,7 @@ class ProxyTtsService : TextToSpeechService() {
     ): String? = try {
         defaultVoiceNameFor(lang)
     } catch (t: Throwable) {
-        Log.e(TAG, "onGetDefaultVoiceNameFor 异常", t)
+        Tlog.e(TAG, "onGetDefaultVoiceNameFor 异常", t)
         null
     }
 
@@ -302,7 +329,7 @@ class ProxyTtsService : TextToSpeechService() {
             synthesize(request, callback)
         } catch (t: Throwable) {
             // 绝不能把异常抛回合成线程：那会让引擎对所有客户端失声
-            Log.e(TAG, "合成异常", t)
+            Tlog.e(TAG, "合成异常", t)
             runCatching { callback.error(TextToSpeech.ERROR_SYNTHESIS) }
         } finally {
             // 契约：无论成败都必须调 done()
@@ -323,30 +350,47 @@ class ProxyTtsService : TextToSpeechService() {
         val trace = runCatching { request?.params?.getString(KEY_PROXY_TRACE) }.getOrNull()
         val target = resolveDownstream()
 
-        // 第 2、3 层防护：运行时硬校验 + 环路探针。
-        // 永远不信配置里的值——它可能来自备份恢复、旧版本导入，或者 adb 直接改的。
-        if (target == null || target == packageName) {
-            Log.e(TAG, "下游引擎无效: target=" + target)
-            if (target != null) Prefs.clearDownstream(this)
-            callback.error(TextToSpeech.ERROR_INVALID_REQUEST)
-            return
-        }
-        // 环路只让这一句失败，**不清配置**：trace 是调用方自己填的参数，
-        // 任何应用都能伪造它，不能凭它改用户的设置。
-        if (trace?.split(';')?.contains(packageName) == true) {
-            Log.e(TAG, "请求形成环路: trace=" + trace)
-            callback.error(TextToSpeech.ERROR_INVALID_REQUEST)
-            return
-        }
-
         // 会话从这里就要登记上：等下游连上最多要好几秒，这期间用户划走，
         // onStop 得能找到它、把它叫醒，否则后面每一句都要跟着干等。
-        val session = Session()
+        val session = Session(Diagnostics.utterances.incrementAndGet(), raw.length)
         activeSession.set(session)
         try {
-            synthesizeWith(session, request, callback, raw, target, trace)
+            // 第 2、3 层防护：运行时硬校验 + 环路探针。
+            // 永远不信配置里的值——它可能来自备份恢复、旧版本导入，或者 adb 直接改的。
+            if (target == null || target == packageName) {
+                Tlog.e(TAG, "下游引擎无效: target=" + target)
+                if (target != null) Prefs.clearDownstream(this)
+                session.end(Diagnostics.EndReason.NO_ENGINE, "目标无效")
+                callback.error(TextToSpeech.ERROR_INVALID_REQUEST)
+                return
+            }
+            // 环路只让这一句失败，**不清配置**：trace 是调用方自己填的参数，
+            // 任何应用都能伪造它，不能凭它改用户的设置。
+            if (trace?.split(';')?.contains(packageName) == true) {
+                Tlog.e(TAG, "请求形成环路: trace=" + trace)
+                session.end(Diagnostics.EndReason.LOOP)
+                callback.error(TextToSpeech.ERROR_INVALID_REQUEST)
+                return
+            }
+            try {
+                synthesizeWith(session, request, callback, raw, target, trace)
+            } catch (t: Throwable) {
+                session.end(Diagnostics.EndReason.EXCEPTION, t.javaClass.simpleName)
+                throw t
+            }
         } finally {
             activeSession.compareAndSet(session, null)
+            // 每一句怎么结束的都记下来，念出来就是故障报告；日志里也留一行，连电脑时能对上号
+            val record = session.toRecord()
+            Diagnostics.record(record)
+            Tlog.i(
+                TAG,
+                "第 " + record.seq + " 句结束: " + record.reason.label +
+                    (record.detail?.let { "(" + it + ")" } ?: "") +
+                    " 字数=" + record.chars + " 块=" + record.chunk + "/" + record.chunks +
+                    " 用时=" + record.elapsedMs + "ms 引擎=" + record.engine +
+                    (if (record.standIn) "(顶替)" else "") + " stopped=" + session.stopped,
+            )
         }
     }
 
@@ -359,15 +403,28 @@ class ProxyTtsService : TextToSpeechService() {
         trace: String?,
     ) {
         Diagnostics.wantedEngine = target
+        val before = downstream.enginePackage
         if (!downstream.ensureReady(target, INIT_TIMEOUT_MS) { session.stopped }) {
-            if (session.stopped) return
+            if (session.stopped) {
+                session.end(Diagnostics.EndReason.UPSTREAM_STOP, "等引擎时被打断")
+                return
+            }
             Diagnostics.actualEngine = downstream.connectedEngine
-            Log.e(TAG, "下游引擎不可用: " + target + "，实际连上 " + Diagnostics.actualEngine)
+            Tlog.e(TAG, "下游引擎不可用: " + target + "，实际连上 " + Diagnostics.actualEngine)
+            session.end(Diagnostics.EndReason.NO_ENGINE)
             callback.error(TextToSpeech.ERROR_SERVICE)
             return
         }
         Diagnostics.actualEngine = downstream.connectedEngine
         Diagnostics.onFallback = downstream.usingFallback
+        session.engine = downstream.enginePackage
+        session.standIn = downstream.usingFallback
+        if (before != null && before != session.engine) {
+            // 只有合成线程会换引擎，所以这里看到的变化就是换引擎的全部
+            Diagnostics.engineSwitches.incrementAndGet()
+            Diagnostics.event("第 " + session.seq + " 句前把引擎从 " + before + " 换成 " + session.engine)
+            Tlog.i(TAG, "换引擎: " + before + " -> " + session.engine)
+        }
         // 正在用顶替引擎时别把目标记成「上次可用」——它此刻恰恰不可用
         if (!downstream.usingFallback) Prefs.rememberGoodEngine(this, target)
 
@@ -382,6 +439,7 @@ class ProxyTtsService : TextToSpeechService() {
         val processed = pipeline().transformSafe(raw, verbosity)
         if (processed.isBlank()) {
             // 例如整条消息只有 emoji，而档位是「关闭」
+            session.end(Diagnostics.EndReason.EMPTY)
             emitSilence(callback)
             return
         }
@@ -389,6 +447,7 @@ class ProxyTtsService : TextToSpeechService() {
         // 长度检查必须放在规范化**之后**：替换是膨胀变换，输入合法不代表输出合法，
         // 超过下游的 getMaxSpeechInputLength() 会让 synthesizeToFile 静默失败。
         val chunks = Chunker.split(processed)
+        session.chunks = chunks.size
 
         // 语速/音调透传。不转发的话，用户在 TalkBack 里调的语速会完全失效。
         val rate = (request?.speechRate ?: 100).coerceIn(10, 600) / 100f
@@ -396,7 +455,6 @@ class ProxyTtsService : TextToSpeechService() {
         val voice = request?.voiceName?.let { decodeVoiceName(it) } ?: pendingVoice
         downstream.applyProsody(rate, pitch, voice)
 
-        Diagnostics.utterances.incrementAndGet()
         val traceValue = packageName + ";" + trace.orEmpty()
         if (Prefs.compatMode(this)) {
             speakThrough(session, request, callback, chunks, traceValue)
@@ -425,7 +483,11 @@ class ProxyTtsService : TextToSpeechService() {
     ) {
         val state = StreamState()
         for (chunk in chunks) {
-            if (session.stopped) return
+            session.chunk++
+            if (session.stopped) {
+                session.end(Diagnostics.EndReason.UPSTREAM_STOP, "提交前")
+                return
+            }
             val pipe = PcmPipe()
             session.pipe = pipe
             val extras = Bundle().apply { putString(KEY_PROXY_TRACE, traceValue) }
@@ -436,11 +498,18 @@ class ProxyTtsService : TextToSpeechService() {
                 // 不试的话，从这一刻起每一句都没声音，直到我们的进程重启。
                 downstream.markBroken()
                 if (downstream.ensureReady(target, INIT_TIMEOUT_MS) { session.stopped }) {
+                    session.engine = downstream.enginePackage
+                    session.standIn = downstream.usingFallback
                     id = downstream.submit(chunk, extras, pipe)
                 }
             }
             if (id == null) {
-                if (!session.stopped) callback.error(TextToSpeech.ERROR_SERVICE)
+                if (session.stopped) {
+                    session.end(Diagnostics.EndReason.UPSTREAM_STOP, "提交时")
+                } else {
+                    session.end(Diagnostics.EndReason.SUBMIT_REJECTED)
+                    callback.error(TextToSpeech.ERROR_SERVICE)
+                }
                 return
             }
             // 打断正好落在提交之前的话，onStop 里的 stop 已经执行完，拦不住刚交上去的这一块。
@@ -451,6 +520,7 @@ class ProxyTtsService : TextToSpeechService() {
             // 又触发补停……朗读读着读着就断了。上一版就是全路径补停，真机上出现了朗读中途停止，
             // 这是最可疑的原因（按改动逐条排查得出，没有日志证实）。
             if (session.stopped) {
+                session.end(Diagnostics.EndReason.UPSTREAM_STOP, "提交后当场补停")
                 downstream.stopNow()
                 downstream.finish(id)
                 return
@@ -462,6 +532,7 @@ class ProxyTtsService : TextToSpeechService() {
                     DrainResult.STALLED -> {
                         // 下游卡死：它的队列头上堵着这一块，后面每一句都得先等满看门狗。
                         // 丢掉这条连接，下一句重连或换顶替。
+                        session.end(Diagnostics.EndReason.STALLED)
                         downstream.markBroken()
                         callback.error(TextToSpeech.ERROR_SYNTHESIS)
                         return
@@ -510,14 +581,17 @@ class ProxyTtsService : TextToSpeechService() {
         state: StreamState,
     ): DrainResult {
         while (true) {
-            if (session.stopped) return DrainResult.STOPPED
+            if (session.stopped) {
+                session.end(Diagnostics.EndReason.UPSTREAM_STOP, "回灌中")
+                return DrainResult.STOPPED
+            }
 
             // 看门狗：下游连续这么久没有任何输出就判定卡死。
             // 这是「停滞」超时而不是「总时长」超时——回灌时 audioAvailable 会因为
             // 播放背压而阻塞，那期间不轮询，所以长文本不会被误杀。
             val event = pipe.poll(STALL_TIMEOUT_MS)
             if (event == null) {
-                Log.e(TAG, "下游 " + STALL_TIMEOUT_MS + "ms 无任何输出，判定卡死")
+                Tlog.e(TAG, "下游 " + STALL_TIMEOUT_MS + "ms 无任何输出，判定卡死")
                 Diagnostics.watchdogTimeouts.incrementAndGet()
                 return DrainResult.STALLED
             }
@@ -529,6 +603,7 @@ class ProxyTtsService : TextToSpeechService() {
                         if (callback.start(event.sampleRate, event.encoding, event.channels)
                             != TextToSpeech.SUCCESS
                         ) {
+                            session.end(Diagnostics.EndReason.UPSTREAM_REFUSED, "start 被拒")
                             return DrainResult.STOPPED
                         }
                         state.started = true
@@ -538,19 +613,21 @@ class ProxyTtsService : TextToSpeechService() {
                         // 同一引擎同一声音下几乎不可能发生。真发生了只能二选一：
                         // 用错误的采样率喂进去（听感是变调，完全听不懂），或者丢掉这一块。
                         // 选丢弃，并且大声打日志——这类杂音极难查。
-                        Log.e(TAG, "采样率漂移 " + event + " vs " + state.format + "，丢弃该块")
+                        Tlog.e(TAG, "采样率漂移 " + event + " vs " + state.format + "，丢弃该块")
                         Diagnostics.formatDrifts.incrementAndGet()
+                        session.end(Diagnostics.EndReason.FORMAT_DRIFT, event.toString() + " 对 " + state.format)
                         return DrainResult.DONE
                     }
                 }
 
                 is PcmPipe.Event.Chunk -> {
                     if (!state.started) {
-                        Log.w(TAG, "下游未上报音频格式，按 16kHz/16 位/单声道兜底")
+                        Tlog.w(TAG, "下游未上报音频格式，按 16kHz/16 位/单声道兜底")
                         Diagnostics.missingFormats.incrementAndGet()
                         if (callback.start(DEFAULT_SAMPLE_RATE, AudioFormat.ENCODING_PCM_16BIT, 1)
                             != TextToSpeech.SUCCESS
                         ) {
+                            session.end(Diagnostics.EndReason.UPSTREAM_REFUSED, "start 被拒")
                             return DrainResult.STOPPED
                         }
                         state.started = true
@@ -558,16 +635,34 @@ class ProxyTtsService : TextToSpeechService() {
                         state.format = PcmPipe.Event.Format(DEFAULT_SAMPLE_RATE, AudioFormat.ENCODING_PCM_16BIT, 1)
                         state.framer = PcmFramer(2)
                     }
-                    if (!feed(callback, event.bytes, state)) return DrainResult.STOPPED
+                    if (!feed(callback, event.bytes, state)) {
+                        // 上游的 audioAvailable 返回错误：几乎只有一种情况，就是框架已经把这一句停了。
+                        // 我们的 onStop 可能还没跑到，所以这里 session.stopped 多半还是 false。
+                        session.end(
+                            Diagnostics.EndReason.UPSTREAM_REFUSED,
+                            if (session.stopped) "回灌被拒，已收到打断" else "回灌被拒，打断还没到",
+                        )
+                        return DrainResult.STOPPED
+                    }
                 }
 
                 PcmPipe.Event.Done -> return DrainResult.DONE
                 is PcmPipe.Event.Failed -> {
-                    Log.e(TAG, "下游合成失败 code=" + event.code)
+                    Tlog.e(TAG, "下游合成失败 code=" + event.code)
                     Diagnostics.downstreamErrors.incrementAndGet()
+                    session.end(Diagnostics.EndReason.DOWNSTREAM_ERROR, "错误码 " + event.code)
                     return DrainResult.FAILED
                 }
-                PcmPipe.Event.Interrupted -> return DrainResult.STOPPED
+                PcmPipe.Event.Interrupted -> {
+                    // 管道被打断有两个来源：我们自己的 onStop（那时 stopped 已经是 true），
+                    // 或者下游的 onStop 回调——那是下游自己停的，不是我们叫的。
+                    if (session.stopped) {
+                        session.end(Diagnostics.EndReason.UPSTREAM_STOP, "管道被打断")
+                    } else {
+                        session.end(Diagnostics.EndReason.DOWNSTREAM_STOP)
+                    }
+                    return DrainResult.STOPPED
+                }
             }
         }
     }
@@ -614,12 +709,17 @@ class ProxyTtsService : TextToSpeechService() {
         if (callback.start(DEFAULT_SAMPLE_RATE, AudioFormat.ENCODING_PCM_16BIT, 1)
             != TextToSpeech.SUCCESS
         ) {
+            session.end(Diagnostics.EndReason.UPSTREAM_REFUSED, "start 被拒")
             return
         }
 
         val incoming = request?.params
         for (chunk in chunks) {
-            if (session.stopped) return
+            session.chunk++
+            if (session.stopped) {
+                session.end(Diagnostics.EndReason.UPSTREAM_STOP, "提交前")
+                return
+            }
             // 不收集音频：直通模式下框架仍会把 PCM 推给我们，不丢弃的话队列很快填满，
             // 每次入队都要在下游的 binder 线程上阻塞
             val pipe = PcmPipe(collectAudio = false)
@@ -644,6 +744,7 @@ class ProxyTtsService : TextToSpeechService() {
             }
 
             if (!downstream.speakDirect(chunk, params, id, pipe)) {
+                session.end(Diagnostics.EndReason.SUBMIT_REJECTED)
                 downstream.markBroken()
                 callback.error(TextToSpeech.ERROR_SERVICE)
                 return
@@ -651,6 +752,7 @@ class ProxyTtsService : TextToSpeechService() {
             // 直通模式是下游直接出声：打断要是正好落在提交之前，不当场停它就会整块念完。
             // 只在这个窄窗口里补停，理由见 streamThrough。
             if (session.stopped) {
+                session.end(Diagnostics.EndReason.UPSTREAM_STOP, "提交后当场补停")
                 downstream.stopNow()
                 downstream.finish(id)
                 return
@@ -662,12 +764,17 @@ class ProxyTtsService : TextToSpeechService() {
                 val budget = PASSTHROUGH_BASE_TIMEOUT_MS + chunk.length * PASSTHROUGH_MS_PER_CHAR
                 var waited = 0L
                 while (true) {
-                    if (session.stopped) return
+                    if (session.stopped) {
+                        session.end(Diagnostics.EndReason.UPSTREAM_STOP, "等播完时")
+                        return
+                    }
                     val event = pipe.poll(POLL_SLICE_MS)
                     if (event == null) {
                         waited += POLL_SLICE_MS
                         if (waited >= budget) {
-                            Log.e(TAG, "直通模式等待下游超时 " + budget + "ms")
+                            Tlog.e(TAG, "直通模式等待下游超时 " + budget + "ms")
+                            Diagnostics.watchdogTimeouts.incrementAndGet()
+                            session.end(Diagnostics.EndReason.STALLED)
                             downstream.stopNow()
                             return
                         }
@@ -676,10 +783,17 @@ class ProxyTtsService : TextToSpeechService() {
                     when (event) {
                         PcmPipe.Event.Done -> break
                         is PcmPipe.Event.Failed -> {
-                            Log.e(TAG, "直通模式下游报错 code=" + event.code)
+                            Tlog.e(TAG, "直通模式下游报错 code=" + event.code)
+                            Diagnostics.downstreamErrors.incrementAndGet()
+                            session.end(Diagnostics.EndReason.DOWNSTREAM_ERROR, "错误码 " + event.code)
                             return
                         }
-                        PcmPipe.Event.Interrupted -> return
+                        PcmPipe.Event.Interrupted -> {
+                            session.end(
+                                if (session.stopped) Diagnostics.EndReason.UPSTREAM_STOP else Diagnostics.EndReason.DOWNSTREAM_STOP,
+                            )
+                            return
+                        }
                         else -> Unit
                     }
                 }
@@ -695,7 +809,19 @@ class ProxyTtsService : TextToSpeechService() {
      * 这是把我们从 onSynthesizeText 的阻塞里唤醒的唯一入口。
      */
     override fun onStop() {
-        runCatching { activeSession.getAndSet(null)?.interrupt() }
+        runCatching {
+            val session = activeSession.getAndSet(null)
+            if (session != null) {
+                session.interrupt()
+                Tlog.i(TAG, "onStop: 打断第 " + session.seq + " 句，第 " + session.chunk + "/" + session.chunks + " 块")
+            } else {
+                // 框架的 stop 是按「当时正在读的那一句」发的，可它送到这里时那一句可能刚好读完了。
+                // 这时下面的 stopNow 落到的是下游队列里的下一块——记下来，真机上出现过就有据可查。
+                Diagnostics.lateStops.incrementAndGet()
+                Diagnostics.event("onStop 到达时没有正在读的句子（迟到的打断）")
+                Tlog.w(TAG, "onStop: 没有正在读的句子，这次 stop 迟到了")
+            }
+        }
         if (lazyDownstream.isInitialized()) runCatching { downstream.stopNow() }
     }
 

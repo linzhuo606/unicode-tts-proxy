@@ -1,7 +1,6 @@
 package com.ttsproxy
 
 import android.content.Context
-import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
 
@@ -40,7 +39,7 @@ object DurableStore {
         val prev = File(f.parentFile, "$name.prev")
         if (prev.exists() && prev.length() > 0) prev.readText(Charsets.UTF_8) else null
     }.getOrElse {
-        Log.w(TAG, "读取 $name 失败，当作没有", it)
+        Tlog.w(TAG, "读取 $name 失败，当作没有", it)
         null
     }
 
@@ -69,7 +68,7 @@ object DurableStore {
         }
         tmp.renameTo(f)
     }.getOrElse {
-        Log.e(TAG, "写入 $name 失败", it)
+        Tlog.e(TAG, "写入 $name 失败", it)
         false
     }
 }

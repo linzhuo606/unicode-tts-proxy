@@ -1,7 +1,6 @@
 package com.ttsproxy
 
 import android.content.Context
-import android.util.Log
 import com.ttsproxy.core.SymbolDict
 import com.ttsproxy.core.UserDict
 import java.io.File
@@ -35,7 +34,7 @@ object UserDictStore {
         val text = DurableStore.read(context, UserDict.FILE_NAME) ?: return emptyList()
         UserDict.parse(text).entries
     }.getOrElse {
-        Log.e(TAG, "用户词典读取失败，本次忽略自定义读法", it)
+        Tlog.e(TAG, "用户词典读取失败，本次忽略自定义读法", it)
         emptyList()
     }
 
@@ -52,7 +51,7 @@ object UserDictStore {
         if (ok) version.incrementAndGet()
         ok
     }.getOrElse {
-        Log.e(TAG, "用户词典写入失败", it)
+        Tlog.e(TAG, "用户词典写入失败", it)
         false
     }
 

@@ -36,6 +36,8 @@ class EngineSwitch<L : EngineSwitch.Link>(
     private val connector: Connector<L>,
     private val selfPackage: String,
     private val timing: Timing = Timing(),
+    /** 每一步决定都念一句给它。core 不碰 Android 的日志，由外面接到落盘日志上。 */
+    private val log: (String) -> Unit = {},
 ) {
 
     /** 到某个引擎的一条连接。 */
@@ -183,6 +185,7 @@ class EngineSwitch<L : EngineSwitch.Link>(
             kick()
             link
         }
+        log("丢弃失效连接 " + link.pkg)
         closeQuietly(drop)
     }
 
@@ -238,11 +241,13 @@ class EngineSwitch<L : EngineSwitch.Link>(
         if (ready === link) ready = null
         if (old != null && old !== link) retired.add(old)
         changed.signalAll()
+        log("换上 " + link.pkg + (old?.let { "，退下 " + it.pkg } ?: "") + (if (link.pkg != wanted) "（顶替）" else ""))
         return link
     }
 
     private fun retarget(pkg: String) {
         if (wanted == pkg) return
+        log("目标改为 " + pkg + (wanted?.let { "（原 " + it + "）" } ?: ""))
         wanted = pkg
         failures = 0
         heavyFailures = 0
@@ -296,7 +301,10 @@ class EngineSwitch<L : EngineSwitch.Link>(
                 }
                 is Step.Connect -> {
                     val pkg = step.pkg
-                    when (val outcome = openQuietly(pkg) { isStillWanted(pkg) }) {
+                    log("开始连目标 " + pkg)
+                    val outcome = openQuietly(pkg) { isStillWanted(pkg) }
+                    log("连目标 " + pkg + " 结果：" + outcome.javaClass.simpleName)
+                    when (outcome) {
                         is Outcome.Opened -> {
                             publish(outcome.link, asTarget = true)
                             return
@@ -342,6 +350,7 @@ class EngineSwitch<L : EngineSwitch.Link>(
                 minOf(timing.backoffMs shl minOf(heavyFailures - 1, 16), timing.backoffMaxMs)
             }
             nextAttemptAt = now + delay
+            log("连 " + pkg + " 失败（" + (if (cheap) "绑不上" else "起不来") + "，第 " + failures + " 次），" + delay + "ms 后再试")
             scheduleRetry(delay)
             // 正等着这个引擎的那一句不必再等：手里有能出声的就先用
             changed.signalAll()
@@ -363,14 +372,17 @@ class EngineSwitch<L : EngineSwitch.Link>(
         } catch (t: Throwable) {
             emptyList()
         }
+        log("目标 " + target + " 连不上，找顶替，候选：" + candidates.joinToString(" "))
         for (pkg in candidates) {
             if (pkg == selfPackage || pkg == target) continue
             if (!stillNeeded()) return
             val outcome = openQuietly(pkg, stillNeeded)
+            log("连顶替 " + pkg + " 结果：" + outcome.javaClass.simpleName)
             if (outcome is Outcome.Opened && publish(outcome.link, asTarget = false)) return
         }
         lock.withLock {
             if (wanted == target && needsStandIn()) {
+                log("顶替候选全部连不上")
                 standInExhausted = true
                 changed.signalAll()
             }
@@ -402,7 +414,11 @@ class EngineSwitch<L : EngineSwitch.Link>(
             }
         }
         discard?.let { closeQuietly(it) }
-        if (discard === link) return false
+        if (discard === link) {
+            log("连好的 " + link.pkg + " 已经不需要了，关掉")
+            return false
+        }
+        log("连好 " + link.pkg + (if (asTarget) "（目标）" else "（顶替）") + "，等下一句换上" + (if (awaited) "，有句子在等" else ""))
         runSafely { connector.onReady(link, awaited) }
         return true
     }

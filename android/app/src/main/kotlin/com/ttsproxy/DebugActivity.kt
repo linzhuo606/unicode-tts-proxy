@@ -1,9 +1,15 @@
 package com.ttsproxy
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.ttsproxy.core.TextPipeline
 import com.ttsproxy.core.Verbosity
@@ -35,6 +41,40 @@ class DebugActivity : AppCompatActivity() {
         findViewById<Button>(R.id.reset_diagnostics).setOnClickListener {
             Diagnostics.reset()
             refreshDiagnostics()
+        }
+
+        // 日志的三个按钮。复制成功要主动念出来，否则用户不知道按成没有
+        val copyLog = findViewById<Button>(R.id.copy_log)
+        copyLog.setOnClickListener {
+            val text = Tlog.snapshot()
+            if (text.isBlank()) {
+                announce(copyLog, getString(R.string.debug_log_empty))
+                return@setOnClickListener
+            }
+            val ok = runCatching {
+                val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                cm.setPrimaryClip(ClipData.newPlainText("ttsproxy-log", text))
+            }.isSuccess
+            val lines = text.count { it == '\n' }
+            announce(copyLog, if (ok) getString(R.string.debug_log_copied, lines) else "复制失败")
+        }
+        findViewById<Button>(R.id.share_log).setOnClickListener {
+            val text = Tlog.snapshot()
+            if (text.isBlank()) {
+                announce(it, getString(R.string.debug_log_empty))
+                return@setOnClickListener
+            }
+            runCatching {
+                val send = Intent(Intent.ACTION_SEND)
+                    .setType("text/plain")
+                    .putExtra(Intent.EXTRA_SUBJECT, "Unicode 朗读中转 日志")
+                    .putExtra(Intent.EXTRA_TEXT, text)
+                startActivity(Intent.createChooser(send, getString(R.string.debug_share_log)))
+            }.onFailure { e -> Toast.makeText(this, "分享失败：" + e.message, Toast.LENGTH_LONG).show() }
+        }
+        findViewById<Button>(R.id.clear_log).setOnClickListener {
+            Tlog.clear()
+            announce(it, getString(R.string.debug_log_cleared))
         }
 
         input.setText(getString(R.string.sample_text))
@@ -69,7 +109,15 @@ class DebugActivity : AppCompatActivity() {
      * 把这一行念出来就是一份可执行的故障报告。
      */
     private fun refreshDiagnostics() {
-        diagnostics?.text = Diagnostics.summary()
+        // 第一段是计数，第二段是最近几句各自怎么结束的。「朗读到一半没了」这类问题，
+        // 光看计数分不清是谁停的，第二段能直接说出是上游、下游还是我们自己。
+        diagnostics?.text = Diagnostics.summary() + "\n\n" + Diagnostics.history()
+    }
+
+    /** 操作结果既显示在 Toast 里，也主动念出来；只靠 Toast 读屏用户经常听不到。 */
+    private fun announce(view: View, message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        view.announceForAccessibility(message)
     }
 
     private companion object {
