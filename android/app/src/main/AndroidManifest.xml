@@ -6,6 +6,15 @@
       （下游引擎选择界面一片空白），而且 new TextToSpeech(ctx, l, pkg) 里的 bindService
       会直接返回 false。不要改用 QUERY_ALL_PACKAGES —— 那个权限上架要审批，而这里够用。
     -->
+    <!--
+      前台服务：真机（华为）上抓到过，开机后系统会把本进程整个冻结几秒——正在读的句子
+      读到一半没声，看门狗线程和合成线程同一毫秒一起醒来。前台服务是所有厂商都认的
+      「别冻我」信号。通知是低优先级、无声的，可在设置里关掉。
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <queries>
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
@@ -32,6 +41,7 @@
             android:name=".ProxyTtsService"
             android:directBootAware="true"
             android:exported="true"
+            android:foregroundServiceType="mediaPlayback"
             android:label="@string/engine_label">
             <intent-filter>
                 <action android:name="android.intent.action.TTS_SERVICE" />

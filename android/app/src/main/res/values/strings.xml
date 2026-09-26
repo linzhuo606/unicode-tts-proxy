@@ -43,6 +43,11 @@
     <string name="debug_empty">请先输入文本</string>
     <string name="debug_diagnostics_label">运行诊断</string>
     <string name="debug_reset_diagnostics">清零诊断计数</string>
+    <string name="pref_keep_alive_title">常驻通知，防止系统冻结</string>
+    <string name="pref_keep_alive_summary">开机后系统会把没打开过的应用冻结几秒，朗读就会读到一半没声。打开后本应用以前台服务运行，通知栏里会常驻一条无声通知。默认开。</string>
+    <string name="keep_alive_channel">后台运行</string>
+    <string name="keep_alive_title">Unicode 朗读中转正在工作</string>
+    <string name="keep_alive_text">这条通知让朗读不被系统冻住。不想看到它，到设置里关掉「常驻通知」即可。</string>
     <string name="pref_log_text_title">日志里记录朗读文本</string>
     <string name="pref_log_text_summary">只在排查问题时打开。打开后运行日志会记下每句朗读的前几十个字，分享日志前请留意里面有没有不想给别人看的内容。排查完记得关掉。</string>
     <string name="debug_log_label">运行日志。进程一启动就开始记，不需要打开本应用。复制后粘贴发给开发者即可，里面不含朗读的文本。</string>

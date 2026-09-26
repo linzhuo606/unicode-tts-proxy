@@ -29,6 +29,7 @@ object Prefs {
     const val KEY_LAST_GOOD = "last_good_engine"
     const val KEY_IPA_BRAILLE = "ipa_braille"
     const val KEY_LOG_TEXT = "log_text"
+    const val KEY_KEEP_ALIVE = "keep_alive"
 
     fun storageContext(context: Context): Context =
         context.createDeviceProtectedStorageContext()
@@ -74,6 +75,13 @@ object Prefs {
      */
     fun logText(context: Context): Boolean =
         of(context).getBoolean(KEY_LOG_TEXT, false)
+
+    /**
+     * 以前台服务运行、常驻一条无声通知。默认开：真机（华为）上开机后系统会把本进程冻结几秒，
+     * 读到一半没声；前台服务是所有厂商都认的「别冻我」信号。
+     */
+    fun keepAlive(context: Context): Boolean =
+        of(context).getBoolean(KEY_KEEP_ALIVE, true)
 
     /** 兼容模式：走「直通」链路而不是「流式截获」，给个别 onAudioAvailable 有 bug 的引擎兜底。 */
     fun compatMode(context: Context): Boolean =

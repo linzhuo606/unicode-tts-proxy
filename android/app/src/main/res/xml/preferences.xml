@@ -54,6 +54,12 @@
             app:title="@string/pref_debug_title" />
 
         <SwitchPreferenceCompat
+            app:defaultValue="true"
+            app:key="keep_alive"
+            app:summary="@string/pref_keep_alive_summary"
+            app:title="@string/pref_keep_alive_title" />
+
+        <SwitchPreferenceCompat
             app:defaultValue="false"
             app:key="log_text"
             app:summary="@string/pref_log_text_summary"

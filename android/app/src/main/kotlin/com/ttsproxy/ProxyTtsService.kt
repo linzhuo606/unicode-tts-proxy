@@ -1,6 +1,14 @@
 package com.ttsproxy
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.ServiceInfo
+import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.os.Bundle
@@ -181,12 +189,81 @@ class ProxyTtsService : TextToSpeechService() {
             runCatching { Prefs.downstreamEngine(this)?.let { downstream.select(it) } }
                 .onFailure { Tlog.e(TAG, "切换发声引擎失败", it) }
         }
+        if (key == Prefs.KEY_KEEP_ALIVE) {
+            if (Prefs.keepAlive(this)) ensureForeground("设置里打开") else leaveForeground()
+        }
+    }
+
+    /**
+     * 是否已经是前台服务。
+     *
+     * 真机（华为）日志：开机后第 118 秒，正在读的一句读到 2.2 秒时整个进程被系统冻结，
+     * 看门狗线程和合成线程在 5.3 秒后同一毫秒一起醒来，音轨报「因 underrun 被禁用，重启」。
+     * 用户听到的就是「读着读着没声」。打开一次本应用系统就不再冻它，所以之前怎么都复现不稳。
+     * 前台服务是所有厂商都认的「别冻我」信号；这里的通知是低优先级、无声的。
+     */
+    @Volatile private var foreground = false
+
+    private fun ensureForeground(why: String) {
+        if (foreground) return
+        try {
+            val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            nm.createNotificationChannel(
+                NotificationChannel(KEEP_ALIVE_CHANNEL, getString(R.string.keep_alive_channel), NotificationManager.IMPORTANCE_LOW).apply {
+                    setShowBadge(false)
+                    setSound(null, null)
+                    enableVibration(false)
+                },
+            )
+            val open = PendingIntent.getActivity(
+                this, 0, Intent(this, SettingsActivity::class.java),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            val notification: Notification = NotificationCompat.Builder(this, KEEP_ALIVE_CHANNEL)
+                .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+                .setContentTitle(getString(R.string.keep_alive_title))
+                .setContentText(getString(R.string.keep_alive_text))
+                .setStyle(NotificationCompat.BigTextStyle().bigText(getString(R.string.keep_alive_text)))
+                .setContentIntent(open)
+                .setOngoing(true)
+                .setSilent(true)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setCategory(NotificationCompat.CATEGORY_SERVICE)
+                .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+                .build()
+            ServiceCompat.startForeground(
+                this, KEEP_ALIVE_NOTIFICATION_ID, notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
+            )
+            foreground = true
+            Tlog.i(TAG, "已升为前台服务（" + why + "）")
+        } catch (t: Throwable) {
+            // Android 12 起后台不能随便起前台服务；被拒就等下一次机会（下一句、或用户打开设置界面）
+            Tlog.w(TAG, "升为前台服务失败（" + why + "）: " + t)
+        }
+    }
+
+    private fun leaveForeground() {
+        if (!foreground) return
+        runCatching { ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE) }
+        foreground = false
+        Tlog.i(TAG, "已退出前台服务")
+    }
+
+    /**
+     * 设置界面在前台时会用 startForegroundService 拉一次，这里必须尽快 startForeground，
+     * 否则系统会以「起了前台服务却不亮通知」为由杀掉进程。
+     */
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (Prefs.keepAlive(this)) ensureForeground("界面拉起") else leaveForeground()
+        return START_NOT_STICKY
     }
 
     override fun onCreate() {
         super.onCreate()
         Tlog.i(TAG, "服务 onCreate，配置的下游=" + runCatching { Prefs.downstreamEngine(this) }.getOrNull())
         runCatching { startFeedWatchdog() }.onFailure { Tlog.w(TAG, "回灌看门狗启动失败", it) }
+        if (Prefs.keepAlive(this)) ensureForeground("服务启动")
         runCatching { Prefs.of(this).registerOnSharedPreferenceChangeListener(engineChoiceListener) }
             .onFailure { Tlog.e(TAG, "监听发声引擎设置失败", it) }
         Thread {
@@ -210,6 +287,7 @@ class ProxyTtsService : TextToSpeechService() {
 
     override fun onDestroy() {
         Tlog.w(TAG, "服务 onDestroy")
+        leaveForeground()
         runCatching { Prefs.of(this).unregisterOnSharedPreferenceChangeListener(engineChoiceListener) }
         // 用 isInitialized 判断，避免为了关闭反而把 lazy 触发出来
         if (lazyDownstream.isInitialized()) runCatching { downstream.shutdown() }
@@ -400,6 +478,8 @@ class ProxyTtsService : TextToSpeechService() {
         // onStop 得能找到它、把它叫醒，否则后面每一句都要跟着干等。
         val session = Session(Diagnostics.utterances.incrementAndGet(), raw.length, caller)
         activeSession.set(session)
+        // 服务启动时升前台可能被系统拒绝，每一句开始都再试一次；已经是前台时这里立刻返回
+        if (!foreground && Prefs.keepAlive(this)) ensureForeground("第 " + session.seq + " 句")
         Tlog.i(
             TAG,
             "第 " + session.seq + " 句开始 字数=" + raw.length + " 来源=" + caller +
@@ -923,6 +1003,8 @@ class ProxyTtsService : TextToSpeechService() {
         const val KEY_PROXY_TRACE = "com.ttsproxy.TRACE"
 
         private const val DEFAULT_SAMPLE_RATE = 16000
+        private const val KEEP_ALIVE_CHANNEL = "keep_alive"
+        private const val KEEP_ALIVE_NOTIFICATION_ID = 1
 
         /** 开了「日志里记录朗读文本」时每句最多记多少字。 */
         private const val LOG_TEXT_CHARS = 60
