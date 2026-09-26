@@ -280,10 +280,7 @@ class DownstreamEngine(base: Context) {
         override fun standIns(): List<String> = availableEngines(context).map { it.name }
 
         override fun onReady(link: Connection, awaited: Boolean) {
-            inBackground {
-                refreshVoices(link)
-                if (!awaited) warmUp(link)
-            }
+            inBackground { refreshVoices(link) }
         }
     }
 
@@ -372,15 +369,6 @@ class DownstreamEngine(base: Context) {
         link.voices = runCatching { engine.voices?.toList().orEmpty() }
             .onFailure { Tlog.w(TAG, "读取下游声音列表失败", it) }
             .getOrDefault(emptyList())
-    }
-
-    /** 抄 TalkBack 的做法：连上之后先空跑一次，把下游的模型和线程预热掉。 */
-    private fun warmUp(link: Connection) {
-        val engine = link.tts ?: return
-        runCatching {
-            val sink = File(context.cacheDir, SINK_PREFIX + "-prime.wav")
-            engine.synthesizeToFile("1 2 3", Bundle(), sink, SINK_PREFIX + "-prime")
-        }.onFailure { Tlog.w(TAG, "预热失败（不影响使用）", it) }
     }
 
     /** 语速/音调透传。不设的话，用户在 TalkBack 里调的语速会完全失效。 */

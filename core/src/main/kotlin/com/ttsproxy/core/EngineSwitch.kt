@@ -72,8 +72,8 @@ class EngineSwitch<L : EngineSwitch.Link>(
         fun standIns(): List<String>
 
         /**
-         * 新连接好了。[awaited] 为 true 表示有一句正等着它读——这时别预热，
-         * 预热会排在真正要读的那一句前面。
+         * 新连接好了。[awaited] 为 true 表示有一句正等着它读。
+         * 这里不做任何预热：真机上引擎刚起来时会把请求悄悄丢掉，预热句只会添乱。
          */
         fun onReady(link: L, awaited: Boolean) {}
     }
