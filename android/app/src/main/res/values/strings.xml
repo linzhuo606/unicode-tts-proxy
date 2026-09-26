@@ -46,26 +46,6 @@
     <string name="debug_empty">请先输入文本</string>
     <string name="debug_diagnostics_label">运行诊断</string>
     <string name="debug_reset_diagnostics">清零诊断计数</string>
-    <string name="pref_startup_title">检查系统的应用启动管理</string>
-    <string name="pref_startup_summary">华为等系统会把没打开过的后台应用冻住几秒，朗读就读到一半没声。每次卸载重装后这里的设置会被清空，请把本应用改成手动管理，并打开允许自启动、允许关联启动、允许后台活动。点这里直接跳过去。</string>
-    <string name="toast_startup_manager_missing">这台手机没有应用启动管理，已打开本应用的应用信息页</string>
-    <string name="pref_help_title">怎样换回原来的引擎</string>
-    <string name="pref_help_summary">打开系统设置，进入无障碍，选择文字转语音输出，把首选引擎改回原来的引擎</string>
-
-    <string name="verbosity_off">关闭：不读表情符号</string>
-    <string name="verbosity_brief">简洁：读简短名称</string>
-    <string name="verbosity_verbose">详细：读完整描述</string>
-
-    <string name="debug_title">检查朗读效果</string>
-    <string name="debug_input_hint">在这里输入或粘贴要检查的文本</string>
-    <string name="debug_input_label">待检查的文本</string>
-    <string name="debug_result_label">处理后的文本</string>
-    <string name="debug_process">处理并朗读</string>
-    <string name="debug_empty">请先输入文本</string>
-    <string name="debug_diagnostics_label">运行诊断</string>
-    <string name="debug_reset_diagnostics">清零诊断计数</string>
-    <string name="pref_self_session_title">防止系统冻结朗读</string>
-    <string name="pref_self_session_summary">保留一条到本引擎自己的连接。有的手机开机后会把后台应用冻住几秒，朗读读到一半就没声，这条连接能让系统一直把本应用当作在用。没有通知、不耗电。默认开，除非排查问题否则不要关。</string>
 
     <string name="toast_engine_ready">中转已就绪，将由 %1$s 发声</string>
     <string name="toast_no_engine">请先选择一个发声引擎</string>
