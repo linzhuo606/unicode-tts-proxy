@@ -54,12 +54,6 @@
             app:title="@string/pref_debug_title" />
 
         <SwitchPreferenceCompat
-            app:defaultValue="true"
-            app:key="self_session"
-            app:summary="@string/pref_self_session_summary"
-            app:title="@string/pref_self_session_title" />
-
-        <SwitchPreferenceCompat
             app:defaultValue="false"
             app:key="compat_mode"
             app:summary="@string/pref_compat_summary"

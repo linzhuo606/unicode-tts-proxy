@@ -141,55 +141,11 @@ class ProxyTtsService : TextToSpeechService() {
             runCatching { Prefs.downstreamEngine(this)?.let { downstream.select(it) } }
                 .onFailure { Log.e(TAG, "切换发声引擎失败", it) }
         }
-        if (key == Prefs.KEY_SELF_SESSION) {
-            if (Prefs.selfSession(this)) openSelfSession() else closeSelfSession()
-        }
-    }
-
-    /**
-     * 到本引擎自己的一条 TextToSpeech 连接，服务活着就一直持有。见 [Prefs.selfSession]。
-     *
-     * 真机（华为）上查实：开机后一两分钟，系统会把本进程整个冻结几秒——正在读的一句读到
-     * 两秒左右就没声，直到读屏发来下一个调用才解冻。前台服务能挡住，但要挂常驻通知；
-     * 每五秒心跳挡不住。而 9 月 11 日之前的版本从没被冻过，反编译对比后发现唯一持久的差别
-     * 就是它启动时无意留下了这样一条到自己的会话。把它明着建回来，冻结就消失了（0.1.8 验证）。
-     * **别当冗余代码删掉。**
-     */
-    @Volatile private var selfSession: TextToSpeech? = null
-
-    private fun openSelfSession() {
-        if (selfSession != null || !Prefs.selfSession(this)) return
-        runCatching {
-            val started = SystemClock.elapsedRealtime()
-            // 必须点名连本引擎。0.2.0 曾用「系统默认引擎」，卸载重装后系统默认引擎不再是本引擎，
-            // 这条连接就连到别处去了，冻结随之复发。
-            selfSession = TextToSpeech(applicationContext, { status ->
-                val engine = runCatching {
-                    TextToSpeech::class.java.getMethod("getCurrentEngine").invoke(selfSession) as? String
-                }.getOrNull()
-                Diagnostics.selfSessionEngine = if (status == TextToSpeech.SUCCESS) (engine ?: "读不到包名") else "失败 " + status
-                Log.i(
-                    TAG,
-                    "到自己的连接 onInit status=" + status + " 连上的引擎=" + engine +
-                        " 用时=" + (SystemClock.elapsedRealtime() - started) + "ms",
-                )
-            }, packageName)
-            Log.i(TAG, "已发起到自己的连接")
-        }.onFailure { Log.w(TAG, "建到自己的连接失败", it) }
-    }
-
-    private fun closeSelfSession() {
-        val s = selfSession ?: return
-        selfSession = null
-        runCatching { s.shutdown() }
-        Log.i(TAG, "已断开到自己的连接")
     }
 
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "服务 onCreate，配置的下游=" + runCatching { Prefs.downstreamEngine(this) }.getOrNull())
-        // 在主线程发起即可，连接是异步的
-        openSelfSession()
         runCatching { Prefs.of(this).registerOnSharedPreferenceChangeListener(engineChoiceListener) }
             .onFailure { Log.e(TAG, "监听发声引擎设置失败", it) }
         Thread {
@@ -212,7 +168,6 @@ class ProxyTtsService : TextToSpeechService() {
     }
 
     override fun onDestroy() {
-        closeSelfSession()
         runCatching { Prefs.of(this).unregisterOnSharedPreferenceChangeListener(engineChoiceListener) }
         // 用 isInitialized 判断，避免为了关闭反而把 lazy 触发出来
         if (lazyDownstream.isInitialized()) runCatching { downstream.shutdown() }

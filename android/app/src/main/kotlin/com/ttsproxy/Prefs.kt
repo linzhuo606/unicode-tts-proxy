@@ -28,7 +28,6 @@ object Prefs {
     const val KEY_DETAIL_SINGLE = "detail_single_emoji"
     const val KEY_LAST_GOOD = "last_good_engine"
     const val KEY_IPA_BRAILLE = "ipa_braille"
-    const val KEY_SELF_SESSION = "self_session"
 
     fun storageContext(context: Context): Context =
         context.createDeviceProtectedStorageContext()
@@ -67,15 +66,6 @@ object Prefs {
      */
     fun detailSingleEmoji(context: Context): Boolean =
         of(context).getBoolean(KEY_DETAIL_SINGLE, true)
-
-    /**
-     * 服务活着就保留一条到本引擎自己的 TextToSpeech 连接，默认开。
-     *
-     * 这是防止系统冻结进程的办法（华为真机查实，见 ProxyTtsService.openSelfSession 的注释）。
-     * 9 月 11 日之前的版本靠一个无意留下的探针会话躲过了冻结，改成查包管理器之后就中招了。
-     */
-    fun selfSession(context: Context): Boolean =
-        of(context).getBoolean(KEY_SELF_SESSION, true)
 
     /** 兼容模式：走「直通」链路而不是「流式截获」，给个别 onAudioAvailable 有 bug 的引擎兜底。 */
     fun compatMode(context: Context): Boolean =
