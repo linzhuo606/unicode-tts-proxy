@@ -30,6 +30,7 @@ object Prefs {
     const val KEY_IPA_BRAILLE = "ipa_braille"
     const val KEY_LOG_TEXT = "log_text"
     const val KEY_KEEP_ALIVE = "keep_alive"
+    const val KEY_HEARTBEAT = "heartbeat"
 
     fun storageContext(context: Context): Context =
         context.createDeviceProtectedStorageContext()
@@ -81,7 +82,14 @@ object Prefs {
      * 读到一半没声；前台服务是所有厂商都认的「别冻我」信号。
      */
     fun keepAlive(context: Context): Boolean =
-        of(context).getBoolean(KEY_KEEP_ALIVE, true)
+        of(context).getBoolean(KEY_KEEP_ALIVE, false)
+
+    /**
+     * 每五秒和系统打一次交道。排查之前的版本每五秒查一次目标引擎，从没被冻结过；
+     * 改成退避重试之后进程一安静就被冻。先按这个假设验证，成立就不用常驻通知。
+     */
+    fun heartbeat(context: Context): Boolean =
+        of(context).getBoolean(KEY_HEARTBEAT, true)
 
     /** 兼容模式：走「直通」链路而不是「流式截获」，给个别 onAudioAvailable 有 bug 的引擎兜底。 */
     fun compatMode(context: Context): Boolean =

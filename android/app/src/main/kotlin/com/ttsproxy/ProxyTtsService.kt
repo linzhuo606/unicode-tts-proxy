@@ -243,6 +243,36 @@ class ProxyTtsService : TextToSpeechService() {
         }
     }
 
+    /**
+     * 心跳：每五秒查一次包管理器，一次很轻的 binder 调用。
+     *
+     * 排查之前的版本每五秒检查一次目标引擎能不能连上，重启后从没被冻结过；
+     * 改成退避重试之后，目标引擎一连上进程就彻底安静，开机后没多久就被系统冻住。
+     * 华为的冻结是给「后台闲着」的应用用的，这条心跳就是让它别把我们当闲着的。
+     * 是不是真的管用，由看门狗的日志来回答。
+     */
+    private fun startHeartbeat() {
+        Thread({
+            var beats = 0L
+            while (true) {
+                try {
+                    Thread.sleep(HEARTBEAT_MS)
+                } catch (e: InterruptedException) {
+                    return@Thread
+                }
+                if (!Prefs.heartbeat(this)) continue
+                runCatching {
+                    val target = Prefs.downstreamEngine(this) ?: packageName
+                    @Suppress("DEPRECATION")
+                    packageManager.queryIntentServices(Intent(TTS_SERVICE_ACTION).setPackage(target), 0)
+                }
+                beats++
+                if (beats % HEARTBEAT_LOG_EVERY == 0L) Tlog.i(TAG, "心跳 " + beats + " 次")
+            }
+        }, "tts-proxy-heartbeat").apply { isDaemon = true }.start()
+        Tlog.i(TAG, "心跳线程已启动，每 " + HEARTBEAT_MS + "ms 一次，开关=" + Prefs.heartbeat(this))
+    }
+
     private fun leaveForeground() {
         if (!foreground) return
         runCatching { ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE) }
@@ -264,6 +294,7 @@ class ProxyTtsService : TextToSpeechService() {
         Tlog.i(TAG, "服务 onCreate，配置的下游=" + runCatching { Prefs.downstreamEngine(this) }.getOrNull())
         runCatching { startFeedWatchdog() }.onFailure { Tlog.w(TAG, "回灌看门狗启动失败", it) }
         if (Prefs.keepAlive(this)) ensureForeground("服务启动")
+        runCatching { startHeartbeat() }.onFailure { Tlog.w(TAG, "心跳线程启动失败", it) }
         runCatching { Prefs.of(this).registerOnSharedPreferenceChangeListener(engineChoiceListener) }
             .onFailure { Tlog.e(TAG, "监听发声引擎设置失败", it) }
         Thread {
@@ -1004,6 +1035,9 @@ class ProxyTtsService : TextToSpeechService() {
 
         private const val DEFAULT_SAMPLE_RATE = 16000
         private const val KEEP_ALIVE_CHANNEL = "keep_alive"
+        private const val HEARTBEAT_MS = 5_000L
+        private const val HEARTBEAT_LOG_EVERY = 60L
+        private const val TTS_SERVICE_ACTION = "android.intent.action.TTS_SERVICE"
         private const val KEEP_ALIVE_NOTIFICATION_ID = 1
 
         /** 开了「日志里记录朗读文本」时每句最多记多少字。 */
