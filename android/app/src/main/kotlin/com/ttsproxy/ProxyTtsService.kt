@@ -82,6 +82,47 @@ class ProxyTtsService : TextToSpeechService() {
     private val activeSession = AtomicReference<Session?>(null)
     private val passthroughIds = AtomicLong()
 
+    /**
+     * 回灌看门狗。真机上抓到过：下游音频早就到齐，可上游的 audioAvailable 一卡就是五秒——
+     * 框架自己的音轨活着却不吃数据，用户听到的就是「读着读着没声了」。
+     * 那段时间我们卡在框架里出不来，只能由另一条线程来记下卡住的起止时刻，好和系统事件对时间。
+     */
+    @Volatile private var feedStartedAt = 0L
+    @Volatile private var feedSeq = 0
+
+    private fun startFeedWatchdog() {
+        Thread({
+            // 正在盯着的那一次调用的开始时刻，以及上一次报告的时刻
+            var watching = 0L
+            var lastReport = 0L
+            while (true) {
+                try {
+                    Thread.sleep(FEED_WATCH_SLICE_MS)
+                } catch (e: InterruptedException) {
+                    return@Thread
+                }
+                val since = feedStartedAt
+                if (since == 0L) {
+                    watching = 0L
+                    continue
+                }
+                val now = SystemClock.elapsedRealtime()
+                val stuck = now - since
+                if (stuck < FEED_STALL_MS) continue
+                if (since != watching) {
+                    // 新的一次卡住：第一次报告
+                    watching = since
+                    lastReport = now
+                    Diagnostics.event("第 " + feedSeq + " 句回灌卡住，上游音轨不吃数据")
+                    Tlog.w(TAG, "回灌卡住 " + stuck + "ms（第 " + feedSeq + " 句），上游音轨不吃数据")
+                } else if (now - lastReport >= FEED_REPORT_EVERY_MS) {
+                    lastReport = now
+                    Tlog.w(TAG, "回灌仍卡着 " + stuck + "ms（第 " + feedSeq + " 句）")
+                }
+            }
+        }, "tts-proxy-feed-watch").apply { isDaemon = true }.start()
+    }
+
     /** 上游选中的声音，由 onLoadVoice 记录，在 onSynthesizeText 里才真正生效。 */
     @Volatile private var pendingVoice: String? = null
 
@@ -145,6 +186,7 @@ class ProxyTtsService : TextToSpeechService() {
     override fun onCreate() {
         super.onCreate()
         Tlog.i(TAG, "服务 onCreate，配置的下游=" + runCatching { Prefs.downstreamEngine(this) }.getOrNull())
+        runCatching { startFeedWatchdog() }.onFailure { Tlog.w(TAG, "回灌看门狗启动失败", it) }
         runCatching { Prefs.of(this).registerOnSharedPreferenceChangeListener(engineChoiceListener) }
             .onFailure { Tlog.e(TAG, "监听发声引擎设置失败", it) }
         Thread {
@@ -684,6 +726,7 @@ class ProxyTtsService : TextToSpeechService() {
      * 所以切分长度对齐到帧，不足一帧的尾巴留到下一次拼上。
      */
     private fun feed(callback: SynthesisCallback, bytes: ByteArray, state: StreamState): Boolean {
+        feedSeq = activeSession.get()?.seq ?: feedSeq
         // 别硬编码 8192：超过 maxBufferSize 会抛 IllegalArgumentException，不是返回错误码。
         // 再对齐到帧的整数倍，否则同样会切在帧中间。
         val maxBuffer = state.framer.alignBufferSize(callback.maxBufferSize)
@@ -694,7 +737,15 @@ class ProxyTtsService : TextToSpeechService() {
             val length = minOf(maxBuffer, data.size - offset)
             // 上游未播完的音频超过 500ms 时这里会阻塞；被 stop 时立刻返回错误。
             // 必须检查返回值，否则打断之后还会继续灌。
-            if (callback.audioAvailable(data, offset, length) != TextToSpeech.SUCCESS) return false
+            val began = SystemClock.elapsedRealtime()
+            feedStartedAt = began
+            val rc = callback.audioAvailable(data, offset, length)
+            feedStartedAt = 0L
+            val took = SystemClock.elapsedRealtime() - began
+            if (took >= FEED_STALL_MS) {
+                Tlog.w(TAG, "回灌恢复，这一次 audioAvailable 卡了 " + took + "ms，返回 " + rc)
+            }
+            if (rc != TextToSpeech.SUCCESS) return false
             offset += length
         }
         return true
@@ -883,6 +934,11 @@ class ProxyTtsService : TextToSpeechService() {
         private const val INIT_TIMEOUT_MS = 8_000L
         private const val STALL_TIMEOUT_MS = 15_000L
         private const val POLL_SLICE_MS = 1_000L
+
+        /** 单次 audioAvailable 超过这么久就算卡住。正常最多阻塞约 500ms（上游缓冲的长度）。 */
+        private const val FEED_STALL_MS = 1_500L
+        private const val FEED_WATCH_SLICE_MS = 250L
+        private const val FEED_REPORT_EVERY_MS = 2_000L
         private const val PASSTHROUGH_BASE_TIMEOUT_MS = 30_000L
         private const val PASSTHROUGH_MS_PER_CHAR = 400L
 

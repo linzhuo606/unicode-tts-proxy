@@ -5,6 +5,11 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
+import android.os.Handler
+import android.os.Looper
 import android.os.UserManager
 
 /**
@@ -46,6 +51,45 @@ class App : Application() {
                 )
             }
         }.onFailure { Tlog.w(TAG, "记录启动状态失败", it) }
+        runCatching { watchAudioDevices() }.onFailure { Tlog.w(TAG, "监听音频设备失败", it) }
+    }
+
+    /**
+     * 音频输出设备的接入和拔出。真机上抓到过音轨活着却几秒不吃数据，最常见的原因就是
+     * 输出设备在切换（开机后蓝牙耳机重连），系统要把所有音轨重建一遍。记下来好对时间。
+     */
+    private fun watchAudioDevices() {
+        val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        am.registerAudioDeviceCallback(
+            object : AudioDeviceCallback() {
+                override fun onAudioDevicesAdded(added: Array<out AudioDeviceInfo>) {
+                    Tlog.i(TAG, "音频设备接入: " + describe(added))
+                }
+
+                override fun onAudioDevicesRemoved(removed: Array<out AudioDeviceInfo>) {
+                    Tlog.i(TAG, "音频设备拔出: " + describe(removed))
+                }
+            },
+            Handler(Looper.getMainLooper()),
+        )
+    }
+
+    private fun describe(devices: Array<out AudioDeviceInfo>): String =
+        devices.filter { it.isSink }.joinToString("，") { deviceType(it.type) + "(" + it.productName + ")" }
+
+    private fun deviceType(type: Int): String = when (type) {
+        AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> "听筒"
+        AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "扬声器"
+        AudioDeviceInfo.TYPE_WIRED_HEADSET -> "有线耳机"
+        AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> "有线耳机"
+        AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> "蓝牙SCO"
+        AudioDeviceInfo.TYPE_BLUETOOTH_A2DP -> "蓝牙A2DP"
+        AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_USB_DEVICE -> "USB"
+        23 -> "助听器"
+        26 -> "蓝牙LE耳机"
+        27 -> "蓝牙LE音箱"
+        30 -> "蓝牙LE广播"
+        else -> "类型" + type
     }
 
     private companion object {

@@ -34,7 +34,7 @@ import java.util.Locale
 object Tlog {
 
     private const val FILE_NAME = "trace.log"
-    private const val MAX_BYTES = 2L * 1024 * 1024
+    private const val MAX_BYTES = 4L * 1024 * 1024
 
     /** 复制到剪贴板时最多带多少字节：binder 单次事务约 1MB，留足余量。分享走文件，不受这个限制。 */
     const val SNAPSHOT_BYTES = 400 * 1024
@@ -233,8 +233,8 @@ object Tlog {
         if (colon <= idx) return false
         val tag = line.substring(idx, colon).trim()
         if (synchronized(ownTags) { tag in ownTags }) return false
-        // AudioTrack 每句刷十几行，但「start()」和「frames delivered」两行能证明声音真放出去了多少
-        if (tag == "AudioTrack") return line.contains("frames delivered") || line.contains(" start(")
+        // 音轨那两个 tag 全留：真机上抓到过音轨活着却五秒不吃数据，要看它有没有被重建、失效、超时
+        if (tag == "AudioTrack" || tag == "AudioSystem" || tag == "android.media.AudioTrack") return true
         if (tag in NOISY_TAGS) return false
         if (tag in WANTED_TAGS) return true
         // 其余只留错误和致命：崩溃、ANR、进程被杀的痕迹都在这两级里
